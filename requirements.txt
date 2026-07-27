@@ -1,0 +1,13 @@
+numpy
+pandas
+matplotlib
+langchain-core
+langchain-openai
+langchain-community
+langgraph 
+python-dotenv
+fastapi
+uvicorn
+sqlalchemy
+psycopg2 
+alembicalpaca-py

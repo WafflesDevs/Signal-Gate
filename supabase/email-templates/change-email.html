@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Confirm email change — Signal Gate</title>
+</head>
+<body style="margin:0;padding:0;background:#06080c;font-family:Arial,Helvetica,sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#06080c;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px;width:100%;">
+          <tr>
+            <td style="background:linear-gradient(135deg,#0b0f16 0%,#12201a 50%,#0b0f16 100%);border:1px solid #2a3340;border-radius:20px 20px 0 0;padding:36px 32px 28px;text-align:center;">
+              <img src="LOGO_URL" width="64" height="64" alt="Signal Gate" style="display:block;margin:0 auto 16px;border:0;" />
+              <div style="font-size:22px;font-weight:800;letter-spacing:0.12em;text-transform:uppercase;color:#e8ecf3;margin:0 0 8px;">Signal Gate</div>
+              <div style="font-size:13px;letter-spacing:0.18em;text-transform:uppercase;color:#e6b35a;">Email update</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#0b0f16;border-left:1px solid #2a3340;border-right:1px solid #2a3340;padding:36px 32px;">
+              <h1 style="margin:0 0 12px;font-size:28px;line-height:1.2;color:#ffffff;font-weight:700;">Confirm your new email</h1>
+              <p style="margin:0 0 28px;font-size:16px;line-height:1.6;color:#9aa6b8;">
+                Confirm <strong style="color:#3ecf9a;">{{ .Email }}</strong> as the new address for your Signal Gate account.
+              </p>
+              <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 auto 28px;">
+                <tr>
+                  <td align="center" style="border-radius:999px;background:#3ecf9a;">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:700;color:#04140f;text-decoration:none;border-radius:999px;">
+                      Confirm email
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0;font-size:13px;line-height:1.55;color:#5c687c;">
+                Didn’t request a change? You can safely ignore this.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#080b10;border:1px solid #2a3340;border-top:0;border-radius:0 0 20px 20px;padding:20px 32px;text-align:center;">
+              <p style="margin:0;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#5c687c;">Signal Gate</p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
