@@ -8,8 +8,9 @@
 1. **Authentication → Providers → Email** → enable Email  
 2. Turn **Confirm email** ON (users must verify before full access)  
 3. **Authentication → URL Configuration**  
-   - Site URL: `http://localhost:5173`  
-   - Redirect URLs: `http://localhost:5173/**`
+   - Site URL: `http://localhost:5173` (local) or your Render URL in production  
+   - Redirect URLs: `http://localhost:5173/**`  
+   - Production: also add `https://YOUR-SERVICE.onrender.com/**` (and set Site URL to that origin when live)
 
 ## 3. Brand the emails (icon + Signal Gate banner)
 Templates live in [`email-templates/`](email-templates/).

@@ -1011,9 +1011,13 @@ export function Chat() {
           ? { type: "approve" }
           : { type: "reject", message: "User said no. Do not retry this trade." }
       );
-      const turn = await api.post(`/chat/conversations/${activeId}/resume`, {
+      const turn = (await api.post(`/chat/conversations/${activeId}/resume`, {
         decisions,
-      });
+      })) as {
+        reply?: string;
+        pending_trades?: Array<{ name: string; arguments: Record<string, unknown> }>;
+        message?: { id: string; role?: string; content?: string } | null;
+      };
 
       const raw = turn.reply ? String(turn.reply).trim() : "";
       const stub = !raw || raw.toLowerCase() === "response submitted";

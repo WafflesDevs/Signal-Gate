@@ -73,6 +73,7 @@ RULES:
     ask them to confirm exits in chat — just propose the buy and wait for Approve/Reject.
 11. If tools say no Alpaca account is linked, tell the user to open Settings and connect keys.
 12. After every trade based execution tell the user to check the active trades panel on their right side.
+13. If the user asks about withdrawing money, tell them to check the Alpaca Dashboard.
 """
 
 # Build the agent once, then reuse it

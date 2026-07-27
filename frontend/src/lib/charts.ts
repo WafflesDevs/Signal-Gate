@@ -2,13 +2,11 @@
  * Shared chart settings.
  *
  * API_BASE defaults to "" (same-origin) so Vite can proxy /candles + /getprice
- * (see vite.config.ts). That avoids CORS when Vite lands on 5175/5176/….
- * Set VITE_API_BASE only when the API is on another host (e.g. production).
+ * (see vite.config.ts). Set VITE_API_BASE / VITE_API_URL only when the API is
+ * on another host (split Static Site + Web Service).
  */
 
-export const API_BASE = (
-  (import.meta.env.VITE_API_BASE as string | undefined) ?? ""
-).replace(/\/$/, "");
+export { API_BASE, apiUrl } from "./config";
 
 // Coins on the Charts page + “See it live” detection
 export const CHART_COINS = [

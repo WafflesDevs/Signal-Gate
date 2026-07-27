@@ -1,0 +1,96 @@
+# Signal Gate — Render Blueprint (free tier)
+# https://render.com/docs/blueprint-spec
+#
+# Recommended: one free Web Service (FastAPI serves frontend/dist).
+# Connect this repo in the Render dashboard → Blueprint, or paste services manually.
+
+services:
+  - type: web
+    name: signal-gate
+    runtime: python
+    plan: free
+    region: oregon
+    branch: main
+    autoDeploy: true
+    buildCommand: bash scripts/render-build.sh
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
+      # --- Required secrets (set in Render Dashboard; sync: false = fill manually) ---
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: CREDENTIALS_FERNET_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # --- Vite build-time (same values as frontend/.env; baked into the SPA) ---
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      # Same-origin SPA+API: leave empty / unset
+      - key: VITE_API_BASE
+        value: ""
+      # Optional tracing
+      - key: LANGSMITH_TRACING
+        value: "false"
+      - key: LANGCHAIN_TRACING_V2
+        value: "false"
+      # Optional: only needed for split Static Site + API (see README Option B)
+      # - key: FRONTEND_URL
+      #   sync: false
+      # - key: CORS_ORIGINS
+      #   sync: false
+
+# ---------------------------------------------------------------------------
+# Option B (also free): uncomment a static site + keep a Python web service
+# that does NOT build the frontend. Then set CORS + VITE_API_BASE.
+# ---------------------------------------------------------------------------
+#  - type: web
+#    name: signal-gate-api
+#    runtime: python
+#    plan: free
+#    buildCommand: pip install -r requirements.txt
+#    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+#    healthCheckPath: /health
+#    envVars:
+#      - key: PYTHON_VERSION
+#        value: "3.12.8"
+#      - key: OPENAI_API_KEY
+#        sync: false
+#      - key: TAVILY_API_KEY
+#        sync: false
+#      - key: CREDENTIALS_FERNET_KEY
+#        sync: false
+#      - key: SUPABASE_URL
+#        sync: false
+#      - key: SUPABASE_ANON_KEY
+#        sync: false
+#      - key: SUPABASE_SERVICE_ROLE_KEY
+#        sync: false
+#      - key: FRONTEND_URL
+#        sync: false
+#      - key: CORS_ORIGINS
+#        sync: false
+#
+#  - type: web
+#    name: signal-gate-ui
+#    runtime: static
+#    # Static sites are free on Render
+#    buildCommand: cd frontend && npm ci && npm run build
+#    staticPublishPath: frontend/dist
+#    envVars:
+#      - key: VITE_SUPABASE_URL
+#        sync: false
+#      - key: VITE_SUPABASE_ANON_KEY
+#        sync: false
+#      - key: VITE_API_BASE
+#        sync: false   # e.g. https://signal-gate-api.onrender.com

@@ -1,7 +1,8 @@
 import { useAuth } from "../auth/AuthContext";
 import { useMemo } from "react";
+import { apiUrl } from "./config";
 
-/** Parse JSON body; surface status + hint when the server returned HTML (e.g. Vite SPA). */
+/** Parse JSON body; surface status + hint when the server returned HTML (e.g. SPA). */
 async function readJsonOrThrow(res: Response): Promise<unknown> {
   const text = await res.text();
   const trimmed = text.trimStart();
@@ -15,7 +16,7 @@ async function readJsonOrThrow(res: Response): Promise<unknown> {
   if (looksHtml) {
     throw new Error(
       `API returned HTML instead of JSON (${res.status} ${res.statusText || "OK"}). ` +
-        `Is the Vite proxy targeting the backend for this path?`
+        `Check VITE_API_BASE / that the backend is up (dev: Vite proxy; prod: same-origin or CORS).`
     );
   }
 
@@ -34,7 +35,7 @@ export async function apiFetch(path: string, token: string | null, init: Request
   headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(path, { ...init, headers });
+  const res = await fetch(apiUrl(path), { ...init, headers });
   if (res.status === 204) return null;
 
   const body = await readJsonOrThrow(res);
@@ -81,7 +82,7 @@ export async function streamChatMessage(
   const headers = new Headers({ "Content-Type": "application/json" });
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(path, {
+  const res = await fetch(apiUrl(path), {
     method: "POST",
     headers,
     body: JSON.stringify(body),
