@@ -9,12 +9,18 @@ Simple flow:
   run_turn()     → user sends a message (wait for full reply)
   stream_turn()  → same, but yield text tokens as they arrive
   resume_turn()  → user clicks Approve or Reject
+
+Portfolio/trading tools run in-process (not MCP HTTP) so they use the
+logged-in user's Alpaca keys via current_user_id contextvar.
 """
 
+from __future__ import annotations
+
 import asyncio
+from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
-from typing import AsyncIterator
+from typing import AsyncIterator, Iterator, Optional
 
 from dotenv import load_dotenv
 from langchain.agents import create_agent
@@ -24,42 +30,49 @@ from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
+from app.agent.portfolio_tools import build_portfolio_tools
+from app.core.user_context import trading_user
+
 load_dotenv()
 
 # Paths to the MCP tool scripts (project root = two levels up from this file)
 ROOT = Path(__file__).resolve().parents[2]
-MCP_PORTFOLIO = str(ROOT / "MCP" / "portfolio.py")
 MCP_TICKERS = str(ROOT / "MCP" / "tickers.py")
 PYTHON = str(ROOT / ".venv" / "bin" / "python")
 
-# Exit tools stay in MCP/API for the app UI — never expose them to the LLM
-_EXIT_TOOL_NAMES = frozenset({"set_exits", "cancel_exits", "list_exits"})
-
 SYSTEM_PROMPT = """
-You are an AI assistant for a paper trading platform.
+You are an AI assistant for a trading platform (user's linked Alpaca Paper or Live account).
 RULES:
 1. Only use the tools you are given.
 2. Do not share secrets or credentials.
-3. Buy a specific amount → execute_trade(qty, ticker). Use tickers like BTC or XRP, never BTCUSD.
+3. Buying — execute_trade(ticker, …) with EXACTLY ONE size field:
+   A) Dollar / "worth" / USD / $ language → notional_usd (Alpaca spends that many dollars).
+      Examples: "10k usd worth of XRP", "$10,000 of XRP", "buy 500 dollars of ETH"
+      → execute_trade(ticker="XRP", notional_usd=10000). Expand k/m: 10k=10000, 1.5k=1500.
+      NEVER pass qty=10 for "10k". NEVER convert dollars to coin qty yourself.
+   B) Coin-unit language → qty only.
+      Examples: "buy 10 XRP", "0.01 BTC" → execute_trade(ticker="XRP", qty=10).
+   Tickers are BTC / ETH / XRP (never BTCUSD).
 4. Multi-coin buys (e.g. "buy BTC and ETH", "split cash between A and B"):
-   - ALWAYS use execute_trade once per coin with a concrete qty.
+   - ALWAYS use execute_trade once per coin.
    - Call all execute_trade tools in the same step so Approve covers every coin together.
-   - NEVER call buy_max_trade for multi-coin requests — it spends ~95% of cash on ONE coin
-     and leaves almost nothing for the rest.
-   - If the user gives amounts ("0.01 BTC and 0.1 ETH"), use those exact qtys.
-   - If they say "split cash" / "buy A and B" without amounts: check cash + prices,
-     pick fair qtys (equal $ split is fine), then call execute_trade for each coin.
+   - NEVER call buy_max_trade for multi-coin requests — it spends ~95% of cash on ONE coin.
+   - Coin amounts → qty; dollar splits → notional_usd per coin (equal $ split is fine).
 5. buy_max_trade(ticker) — ONLY when the user clearly wants MAX for ONE coin:
    words like "max", "all in", "fill portfolio", "as much as possible" for a single ticker.
-   Call it once. Do not guess the qty. Never use it for two or more coins.
+   Never use it when they named a dollar amount — use notional_usd instead.
 6. Sell all of a coin → get_current_positions, then sell_trade once with the full qty.
 7. Use get_price for prices and get_tickers for the list.
-8. After a trade, call get_current_portfoilo and show the new amounts.
+8. After a trade, call get_current_portfoilo and report the tool results honestly.
+   If the tool returned notional_usd=10000, say you spent ~$10,000 — do not invent fills.
+   If cash only moved a little, say so; never claim $10,000 when tools show otherwise.
 9. For research, use search_web. Do not make up facts.
 10. Stop-loss / take-profit: Do NOT set, cancel, or list exits. The user chooses
     Investment (no exits) or Short-term trade (optional SL/TP) on the Approve card.
     Never call set_exits, cancel_exits, or list_exits. Do not invent exit prices or
     ask them to confirm exits in chat — just propose the buy and wait for Approve/Reject.
+11. If tools say no Alpaca account is linked, tell the user to open Settings and connect keys.
+12. After every trade based execution tell the user to check the active trades panel on their right side.
 """
 
 # Build the agent once, then reuse it
@@ -79,14 +92,10 @@ async def get_agent():
         if _agent is not None:
             return _agent
 
-        # 1) Start MCP servers (portfolio + tickers tools)
+        # Tickers/prices stay on MCP (public endpoints, no user keys).
+        # Portfolio/trading tools are in-process so they see current_user_id.
         client = MultiServerMCPClient(
             {
-                "portfolio": {
-                    "transport": "stdio",
-                    "command": PYTHON,
-                    "args": [MCP_PORTFOLIO],
-                },
                 "tickers": {
                     "transport": "stdio",
                     "command": PYTHON,
@@ -94,16 +103,9 @@ async def get_agent():
                 },
             }
         )
-        all_tools = await client.get_tools()
-        # Keep exit MCP tools for /paper/exits + monitor; hide from the agent
-        tools = [
-            t
-            for t in all_tools
-            if getattr(t, "name", None) not in _EXIT_TOOL_NAMES
-        ]
+        ticker_tools = await client.get_tools()
+        tools = [*build_portfolio_tools(), *ticker_tools]
 
-        # 2) Pause before buy/sell so the user can Approve / Reject
-        # 3) InMemorySaver remembers where we paused (needs a thread_id)
         _checkpointer = InMemorySaver()
         _agent = create_agent(
             ChatOpenAI(model="gpt-4o-mini", temperature=0),
@@ -125,7 +127,6 @@ async def get_agent():
 
 def _get_reply(result) -> str:
     """Get the assistant's text from this turn only."""
-    # Pull the message list out of the result
     if hasattr(result, "value") and result.value is not None:
         messages = result.value.get("messages", [])
     elif isinstance(result, dict):
@@ -133,7 +134,6 @@ def _get_reply(result) -> str:
     else:
         messages = []
 
-    # Only look at messages after the latest user message
     start = 0
     for i, msg in enumerate(messages):
         if getattr(msg, "type", None) == "human":
@@ -205,51 +205,83 @@ def _finish_turn(result) -> dict:
     return {"reply": reply, "pending_trades": pending}
 
 
+@contextmanager
+def _user_scope(user_id: Optional[str]) -> Iterator[None]:
+    if user_id:
+        with trading_user(user_id):
+            yield
+    else:
+        yield
+
+
 async def _reset_chat(thread_id: str):
     """Wipe this chat's agent memory (used when state gets stuck)."""
     if _checkpointer is not None:
         await _checkpointer.adelete_thread(thread_id)
 
 
-async def _prepare_turn(thread_id: str):
+async def clear_thread_memory(thread_ids: list[str]) -> None:
+    """Best-effort wipe of in-memory HITL/agent state for the given chat ids."""
+    if not thread_ids or _checkpointer is None:
+        return
+    for tid in thread_ids:
+        try:
+            await _checkpointer.adelete_thread(tid)
+        except Exception:
+            pass
+
+
+def _agent_config(thread_id: str, user_id: Optional[str] = None) -> dict:
+    """thread_id + user_id so in-process tools load that user's Alpaca keys."""
+    configurable: dict = {"thread_id": thread_id}
+    if user_id:
+        configurable["user_id"] = user_id
+    return {"configurable": configurable}
+
+
+async def _prepare_turn(thread_id: str, user_id: Optional[str] = None):
     """Load agent + config; clear a stuck Approve interrupt if needed."""
     agent = await get_agent()
-    config = {"configurable": {"thread_id": thread_id}}
+    config = _agent_config(thread_id, user_id)
     state = await agent.aget_state(config)
     if getattr(state, "interrupts", None):
         await _reset_chat(thread_id)
     return agent, config
 
 
-async def run_turn(thread_id: str, user_message: str) -> dict:
+async def run_turn(
+    thread_id: str, user_message: str, *, user_id: Optional[str] = None
+) -> dict:
     """
     Send one user message.
     Returns: { "reply": str, "pending_trades": list }
     """
-    agent, config = await _prepare_turn(thread_id)
+    agent, config = await _prepare_turn(thread_id, user_id)
 
-    try:
-        result = await agent.ainvoke(
-            {"messages": [{"role": "user", "content": user_message}]},
-            config=config,
-            version="v2",
-        )
-    except Exception as e:
-        # Broken memory after a server reload — reset and try once more
-        if "tool_call_id" in str(e):
-            await _reset_chat(thread_id)
+    with _user_scope(user_id):
+        try:
             result = await agent.ainvoke(
                 {"messages": [{"role": "user", "content": user_message}]},
                 config=config,
                 version="v2",
             )
-        else:
-            raise
+        except Exception as e:
+            if "tool_call_id" in str(e):
+                await _reset_chat(thread_id)
+                result = await agent.ainvoke(
+                    {"messages": [{"role": "user", "content": user_message}]},
+                    config=config,
+                    version="v2",
+                )
+            else:
+                raise
 
     return _finish_turn(result)
 
 
-async def stream_turn(thread_id: str, user_message: str) -> AsyncIterator[dict]:
+async def stream_turn(
+    thread_id: str, user_message: str, *, user_id: Optional[str] = None
+) -> AsyncIterator[dict]:
     """
     Same as run_turn, but yields events as the model writes:
 
@@ -258,7 +290,7 @@ async def stream_turn(thread_id: str, user_message: str) -> AsyncIterator[dict]:
 
     HITL interrupts still work — pending_trades land on the done event.
     """
-    agent, config = await _prepare_turn(thread_id)
+    agent, config = await _prepare_turn(thread_id, user_id)
     payload = {"messages": [{"role": "user", "content": user_message}]}
 
     async def _stream_once():
@@ -270,46 +302,46 @@ async def stream_turn(thread_id: str, user_message: str) -> AsyncIterator[dict]:
         ):
             yield part
 
-    try:
-        stream = _stream_once()
-        async for part in stream:
-            if part.get("type") != "messages":
-                continue
-            msg, meta = part["data"]
-            # Only stream tokens from the LLM node (skip tool noise)
-            if meta.get("langgraph_node") != "model":
-                continue
-            text = _chunk_text(msg)
-            if text:
-                yield {"type": "token", "text": text}
-    except Exception as e:
-        if "tool_call_id" not in str(e):
-            raise
-        # Broken memory after a server reload — reset and try once more
-        await _reset_chat(thread_id)
-        async for part in _stream_once():
-            if part.get("type") != "messages":
-                continue
-            msg, meta = part["data"]
-            if meta.get("langgraph_node") != "model":
-                continue
-            text = _chunk_text(msg)
-            if text:
-                yield {"type": "token", "text": text}
+    with _user_scope(user_id):
+        try:
+            stream = _stream_once()
+            async for part in stream:
+                if part.get("type") != "messages":
+                    continue
+                msg, meta = part["data"]
+                if meta.get("langgraph_node") != "model":
+                    continue
+                text = _chunk_text(msg)
+                if text:
+                    yield {"type": "token", "text": text}
+        except Exception as e:
+            if "tool_call_id" not in str(e):
+                raise
+            await _reset_chat(thread_id)
+            async for part in _stream_once():
+                if part.get("type") != "messages":
+                    continue
+                msg, meta = part["data"]
+                if meta.get("langgraph_node") != "model":
+                    continue
+                text = _chunk_text(msg)
+                if text:
+                    yield {"type": "token", "text": text}
 
-    # Final state has the full reply + any Approve/Reject interrupt
-    state = await agent.aget_state(config)
-    turn = _finish_turn(_result_from_state(state))
-    yield {"type": "done", **turn}
+        state = await agent.aget_state(config)
+        turn = _finish_turn(_result_from_state(state))
+        yield {"type": "done", **turn}
 
 
-async def resume_turn(thread_id: str, decisions: list[dict]) -> dict:
+async def resume_turn(
+    thread_id: str, decisions: list[dict], *, user_id: Optional[str] = None
+) -> dict:
     """
     Continue after Approve / Reject.
     If the agent asks again in the same run, keep using the same choice.
     """
     agent = await get_agent()
-    config = {"configurable": {"thread_id": thread_id}}
+    config = _agent_config(thread_id, user_id)
 
     state = await agent.aget_state(config)
     if not getattr(state, "interrupts", None):
@@ -319,33 +351,33 @@ async def resume_turn(thread_id: str, decisions: list[dict]) -> dict:
         }
 
     result = None
-    for _ in range(5):
-        try:
-            result = await agent.ainvoke(
-                Command(resume={"decisions": decisions}),
-                config=config,
-                version="v2",
-            )
-        except Exception as e:
-            if "tool_call_id" in str(e):
-                await _reset_chat(thread_id)
-                return {
-                    "reply": "Approval failed. Please send the trade again.",
-                    "pending_trades": [],
-                }
-            raise
+    with _user_scope(user_id):
+        for _ in range(5):
+            try:
+                result = await agent.ainvoke(
+                    Command(resume={"decisions": decisions}),
+                    config=config,
+                    version="v2",
+                )
+            except Exception as e:
+                if "tool_call_id" in str(e):
+                    await _reset_chat(thread_id)
+                    return {
+                        "reply": "Approval failed. Please send the trade again.",
+                        "pending_trades": [],
+                    }
+                raise
 
-        pending = _get_pending(result)
-        if not pending:
-            break
+            pending = _get_pending(result)
+            if not pending:
+                break
 
-        # Same Approve/Reject for any follow-up trades
-        if decisions and decisions[0].get("type") == "approve":
-            decisions = [{"type": "approve"}] * len(pending)
-        else:
-            decisions = [
-                {"type": "reject", "message": "User said no. Do not retry this trade."}
-            ] * len(pending)
+            if decisions and decisions[0].get("type") == "approve":
+                decisions = [{"type": "approve"}] * len(pending)
+            else:
+                decisions = [
+                    {"type": "reject", "message": "User said no. Do not retry this trade."}
+                ] * len(pending)
 
     pending = _get_pending(result)
     reply = _get_reply(result)

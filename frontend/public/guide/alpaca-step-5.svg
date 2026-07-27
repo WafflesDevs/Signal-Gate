@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" fill="none">
+<rect width="960" height="540" fill="#06080c"/>
+<rect x="48" y="48" width="864" height="444" rx="20" fill="#0b0f16" stroke="#4a5568" stroke-opacity="0.45"/>
+<text x="80" y="100" fill="#3ecf9a" font-family="ui-sans-serif,system-ui" font-size="18" font-weight="700">5 · Save &amp; test connection</text>
+<text x="80" y="130" fill="#9aa6b8" font-family="ui-sans-serif,system-ui" font-size="14">We call Alpaca get_account() before saving. Then Chat unlocks.</text>
+<rect x="220" y="180" width="520" height="240" rx="16" fill="#121821" stroke="#3ecf9a" stroke-opacity="0.4"/>
+<circle cx="480" cy="260" r="36" fill="rgba(62,207,154,0.16)" stroke="#3ecf9a" stroke-width="3"/>
+<path d="M462 262 L474 274 L502 244" stroke="#3ecf9a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="320" y="340" fill="#e8ecf3" font-family="ui-sans-serif,system-ui" font-size="18" font-weight="700">Connected · Paper</text>
+<text x="300" y="372" fill="#9aa6b8" font-family="ui-sans-serif,system-ui" font-size="14">Key saved encrypted · ready to trade in Chat</text>
+</svg>

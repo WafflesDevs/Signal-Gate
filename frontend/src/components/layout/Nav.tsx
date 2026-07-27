@@ -78,6 +78,17 @@ export function Nav() {
         >
           Chat
         </NavLink>
+        {user && (
+          <NavLink
+            to="/settings"
+            className={({ isActive }) =>
+              `nav__link${isActive ? " nav__link--active" : ""}`
+            }
+            onClick={() => setOpen(false)}
+          >
+            Settings
+          </NavLink>
+        )}
         {user ? (
           <>
             <button

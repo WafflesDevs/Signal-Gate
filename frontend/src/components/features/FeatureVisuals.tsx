@@ -295,3 +295,46 @@ export function VisualCharts({ className }: VisualProps) {
     </svg>
   );
 }
+
+/** Alpaca symbol — Trading API partner mark. */
+export function VisualAlpaca({ className }: VisualProps) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 360 220"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <rect
+        x="28"
+        y="36"
+        width="304"
+        height="148"
+        rx="16"
+        stroke="#4a5568"
+        strokeOpacity="0.55"
+        fill="#0b0f16"
+      />
+      <image
+        href="/features/alpaca-mark.png"
+        x="130"
+        y="58"
+        width="100"
+        height="98"
+        preserveAspectRatio="xMidYMid meet"
+      />
+      <text
+        x="180"
+        y="178"
+        textAnchor="middle"
+        fill="#8b97ab"
+        fontFamily="JetBrains Mono, monospace"
+        fontSize="11"
+        letterSpacing="1.2"
+      >
+        TRADING API
+      </text>
+    </svg>
+  );
+}

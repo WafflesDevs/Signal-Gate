@@ -42,7 +42,7 @@ export function Home() {
               <span>Gate</span>
             </h1>
             <p className="hero__headline">
-              Your crypto trading desk, spoken in plain English.
+              Your crypto trading desk, spoken in plain English. Powered by Alpaca's API.
             </p>
             <p className="hero__sub">
               Ask prices, scan markets, and paper-trade with human approval

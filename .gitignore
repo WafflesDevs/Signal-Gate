@@ -2,39 +2,75 @@
 .env
 .env.*
 !.env.example
+!**/.env.example
 frontend/.env
 frontend/.env.*
-!**/.env.example
+*.pem
+*.key
+!*.key.example
+credentials.json
+**/credentials.json
+*fernet*
+!*fernet*.py
+!*fernet*.md
+CREDENTIALS_FERNET_KEY
+.secrets/
+secrets/
 
 # Python
 .venv/
 venv/
+env/
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
+.eggs/
+dist/
+build/
+*.egg
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
+.coverage.*
 htmlcov/
+.tox/
+.nox/
+.cache/
 
 # Node
+node_modules/
 frontend/node_modules/
 frontend/dist/
+frontend/build/
 npm-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+.npm
+.yarn/
 
-# App data / local
+# App data / local (keep folder via .gitkeep; ignore local secrets/rules)
+data/*
+!data/.gitkeep
 data/exit_rules.json
-data/
+*.local.json
 
 # OS / IDE
 .DS_Store
+Thumbs.db
 .idea/
 .vscode/
 *.swp
+*.swo
+*~
 .cursor/
+*.code-workspace
 
-# LangSmith / logs if any
+# LangSmith / logs
 *.log
 .langsmith/
+
+# Misc local tooling
+.python-version
+.tool-versions

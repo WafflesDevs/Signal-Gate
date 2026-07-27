@@ -2,7 +2,7 @@
 Background SL/TP monitor.
 
 Polls prices every few seconds. When stop-loss or take-profit hits,
-places a paper market sell and clears that ticker's exit rule.
+places a market sell with that rule owner's Alpaca credentials and clears the rule.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from typing import Optional
 
 import requests
 
+from app.core.user_context import trading_user
 from app.exits.store import ExitRule, delete_rule, list_rules
 
 logger = logging.getLogger("signal_gate.exits")
@@ -46,11 +47,11 @@ def fetch_spot_price(ticker: str) -> float:
     return float(amount)
 
 
-def _resolve_sell_qty(ticker: str, rule_qty: Optional[float]) -> Optional[float]:
+def _resolve_sell_qty(ticker: str, rule_qty: Optional[float], user_id: Optional[str]) -> Optional[float]:
     """How much to sell; None if no position."""
     from app.routers.paper import held_qty
 
-    held = held_qty(ticker)
+    held = held_qty(ticker, user_id=user_id)
     if held <= 0:
         return None
     if rule_qty is None:
@@ -60,63 +61,79 @@ def _resolve_sell_qty(ticker: str, rule_qty: Optional[float]) -> Optional[float]
 
 def check_and_execute_rule(rule: ExitRule, price: Optional[float] = None) -> Optional[dict]:
     """
-    Evaluate one rule. If triggered, market-sell and delete the rule.
-    Returns a result dict when an exit fired, else None.
-    Safe to call from tests with a mocked price.
+    Evaluate one rule. If triggered, market-sell with that user's Settings
+    credentials and delete the rule. Never uses .env Alpaca keys.
     """
+    from app.core.alpaca_credentials import load_credentials
     from app.routers.paper import market_sell
 
-    try:
-        px = float(price) if price is not None else fetch_spot_price(rule.ticker)
-    except Exception as e:
-        logger.warning("exit monitor: price fetch failed for %s: %s", rule.ticker, e)
+    if not rule.user_id:
+        logger.warning(
+            "exit monitor: clearing orphan rule %s (no user_id — env Alpaca unused)",
+            rule.ticker,
+        )
+        delete_rule(rule.ticker, user_id=None)
         return None
 
-    reason = should_trigger(px, rule)
-    if reason is None:
+    # Only fire for users who still have linked Settings credentials
+    if load_credentials(rule.user_id) is None:
+        logger.warning(
+            "exit monitor: skipping %s for user %s — no linked Alpaca credentials",
+            rule.ticker,
+            rule.user_id,
+        )
         return None
 
-    qty = _resolve_sell_qty(rule.ticker, rule.qty)
-    if qty is None or qty <= 0:
-        logger.info(
-            "exit monitor: %s hit %s @ %s but no position — clearing rule",
-            rule.ticker,
-            reason,
-            px,
-        )
-        delete_rule(rule.ticker)
-        return {
-            "ticker": rule.ticker,
-            "reason": reason,
-            "price": px,
-            "sold": False,
-            "detail": "no position",
-        }
-
     try:
-        order = market_sell(rule.ticker, qty)
-        delete_rule(rule.ticker)
-        logger.info(
-            "exit monitor: %s %s triggered @ %s — sold %s (rule cleared)",
-            rule.ticker,
-            reason,
-            px,
-            qty,
-        )
-        return {
-            "ticker": rule.ticker,
-            "reason": reason,
-            "price": px,
-            "sold": True,
-            "qty": qty,
-            "order": order,
-        }
+        with trading_user(rule.user_id):
+            # Drop orphan rules left after a manual / agent sell (before price check)
+            qty = _resolve_sell_qty(rule.ticker, rule.qty, rule.user_id)
+            if qty is None or qty <= 0:
+                logger.info(
+                    "exit monitor: %s has no position — clearing stale rule",
+                    rule.ticker,
+                )
+                delete_rule(rule.ticker, user_id=rule.user_id)
+                return {
+                    "ticker": rule.ticker,
+                    "reason": "no_position",
+                    "sold": False,
+                    "detail": "cleared stale rule",
+                }
+
+            try:
+                px = float(price) if price is not None else fetch_spot_price(rule.ticker)
+            except Exception as e:
+                logger.warning(
+                    "exit monitor: price fetch failed for %s: %s", rule.ticker, e
+                )
+                return None
+
+            reason = should_trigger(px, rule)
+            if reason is None:
+                return None
+
+            order = market_sell(rule.ticker, qty, user_id=rule.user_id)
+            delete_rule(rule.ticker, user_id=rule.user_id)
+            logger.info(
+                "exit monitor: %s %s triggered @ %s — sold %s (rule cleared)",
+                rule.ticker,
+                reason,
+                px,
+                qty,
+            )
+            return {
+                "ticker": rule.ticker,
+                "reason": reason,
+                "price": px,
+                "sold": True,
+                "qty": qty,
+                "order": order,
+            }
     except Exception as e:
         logger.error(
-            "exit monitor: sell failed for %s after %s @ %s: %s",
+            "exit monitor: sell failed for %s: %s",
             rule.ticker,
-            reason,
-            px,
             e,
         )
         return None

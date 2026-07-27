@@ -1,4 +1,14 @@
-import requests
+"""
+DEPRECATED for the chat agent.
+
+Trading/portfolio tools now run in-process via app/agent/portfolio_tools.py
+using the logged-in user's Settings credentials (never .env Alpaca keys).
+
+This MCP script is kept only for local experiments. Unauthenticated HTTP
+calls to /paper/* will fail (auth required). Do not re-wire the agent to
+this file for live trading.
+"""
+
 from mcp.server.fastmcp import FastMCP
 from dotenv import load_dotenv
 from tavily import TavilyClient
@@ -6,8 +16,12 @@ from tavily import TavilyClient
 load_dotenv()
 
 mcp = FastMCP("portfolio")
-BASE = "http://127.0.0.1:8000"
 tavily = TavilyClient()
+
+_DISABLED = (
+    "Portfolio MCP HTTP tools are disabled. "
+    "Use Settings-linked credentials via in-process agent tools."
+)
 
 
 @mcp.tool()
@@ -18,50 +32,32 @@ def search_web(query: str) -> str:
 
 @mcp.tool()
 def get_current_portfoilo() -> str:
-    """Get cash / equity in the paper account."""
-    return str(requests.get(f"{BASE}/paper/account").json())
+    """Disabled — agent uses in-process tools with per-user Alpaca keys."""
+    return _DISABLED
 
 
 @mcp.tool()
 def get_current_positions() -> str:
-    """Get coins you currently hold."""
-    return str(requests.get(f"{BASE}/paper/positions").json())
+    """Disabled — agent uses in-process tools with per-user Alpaca keys."""
+    return _DISABLED
 
 
 @mcp.tool()
 def execute_trade(qty: float, ticker: str):
-    """
-    Buy a specific qty of one coin. ticker = BTC / ETH / XRP (not BTCUSD).
-    Use this for every normal buy, including multi-coin requests — call once per coin
-    with its own qty. Prefer this over buy_max_trade whenever the user names amounts
-    or wants more than one coin (e.g. "buy 0.01 BTC and 0.1 ETH", "split cash into BTC and ETH").
-    """
-    return requests.post(
-        f"{BASE}/paper/buy",
-        json={"qty": round(float(qty), 8), "ticker": ticker},
-    ).json()
+    """Disabled — agent uses in-process tools with per-user Alpaca keys."""
+    return {"error": _DISABLED}
 
 
 @mcp.tool()
 def buy_max_trade(ticker: str):
-    """
-    Spend ~95% of cash on ONE coin only. Use ONLY when the user explicitly wants max
-    for a single ticker ('max', 'all in', 'fill portfolio', 'as much as possible').
-    NEVER use for multi-coin buys — that empties cash on the first coin.
-    """
-    return requests.post(f"{BASE}/paper/buy-max", json={"ticker": ticker}).json()
+    """Disabled — agent uses in-process tools with per-user Alpaca keys."""
+    return {"error": _DISABLED}
 
 
 @mcp.tool()
 def sell_trade(qty: float, ticker: str):
-    """
-    Sell a specific qty of one coin. ticker = BTC / ETH / XRP (not BTCUSD).
-    For multiple coins, call once per coin with that coin's qty.
-    """
-    return requests.post(
-        f"{BASE}/paper/sell",
-        json={"qty": round(float(qty), 8), "ticker": ticker},
-    ).json()
+    """Disabled — agent uses in-process tools with per-user Alpaca keys."""
+    return {"error": _DISABLED}
 
 
 @mcp.tool()
@@ -71,32 +67,20 @@ def set_exits(
     take_profit: float | None = None,
     qty: float | None = None,
 ):
-    """
-    Set stop-loss and/or take-profit for a coin you hold.
-    When price hits either level, the app auto market-sells and clears both.
-    Omit qty to sell the full position on trigger. Replaces any existing rule for this ticker.
-    Example after a buy: set_exits("BTC", stop_loss=90000, take_profit=110000)
-    """
-    body: dict = {"ticker": ticker}
-    if stop_loss is not None:
-        body["stop_loss"] = float(stop_loss)
-    if take_profit is not None:
-        body["take_profit"] = float(take_profit)
-    if qty is not None:
-        body["qty"] = round(float(qty), 8)
-    return requests.post(f"{BASE}/paper/exits", json=body).json()
+    """Disabled — use authenticated /paper/exits API."""
+    return {"error": _DISABLED}
 
 
 @mcp.tool()
 def list_exits() -> str:
-    """List active stop-loss / take-profit rules."""
-    return str(requests.get(f"{BASE}/paper/exits").json())
+    """Disabled — use authenticated /paper/exits API."""
+    return _DISABLED
 
 
 @mcp.tool()
 def cancel_exits(ticker: str):
-    """Cancel stop-loss / take-profit for a ticker (e.g. cancel_exits("BTC"))."""
-    return requests.delete(f"{BASE}/paper/exits/{ticker}").json()
+    """Disabled — use authenticated /paper/exits API."""
+    return {"error": _DISABLED}
 
 
 if __name__ == "__main__":

@@ -36,6 +36,12 @@ Also set subjects, for example:
 ## 4. Database
 Run [`schema.sql`](schema.sql) in **SQL Editor**.
 
+This creates:
+- `conversations` + `messages` (chat history)
+- `alpaca_credentials` (per-user Alpaca API keys — **required for Settings**)
+
+If you already ran an older schema, re-run the `alpaca_credentials` section at the bottom of `schema.sql`.
+
 ## 5. Env vars
 
 Root `.env`:
@@ -43,6 +49,10 @@ Root `.env`:
 SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 SUPABASE_ANON_KEY=your_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+
+# Required to encrypt Alpaca secrets in Settings
+# python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+CREDENTIALS_FERNET_KEY=your_fernet_key_here
 ```
 
 `frontend/.env`:
@@ -60,4 +70,4 @@ uvicorn app.main:app --reload --port 8000
 cd frontend && npm run dev
 ```
 
-Signup → check inbox → branded **Verify your email** → then open Chat.
+Signup → check inbox → branded **Verify your email** → **Settings** → link Alpaca → Chat.

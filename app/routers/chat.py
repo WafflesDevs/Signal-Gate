@@ -18,6 +18,8 @@ from fastapi.responses import StreamingResponse
 
 from app.agent.agent_service import resume_turn, run_turn, stream_turn
 from app.core.auth import AuthUser, get_current_user
+from app.core.alpaca_client import LINK_REQUIRED
+from app.core.alpaca_credentials import get_status
 from app.schemas.schemas import (
     ChatMessageBody,
     ChatTurnOut,
@@ -209,6 +211,34 @@ def delete_conversation(conversation_id: str, user: AuthUser = Depends(get_curre
     return None
 
 
+def list_conversation_ids(user_id: str) -> list[str]:
+    """All conversation UUIDs for this user (no other users)."""
+    res = (
+        get_supabase()
+        .table("conversations")
+        .select("id")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return [str(row["id"]) for row in (res.data or []) if row.get("id")]
+
+
+def delete_all_conversations_for_user(user_id: str) -> int:
+    """
+    Delete every conversation for this user.
+    Messages (and pending_trades in metadata) cascade via FK on conversation_id.
+    Scoped strictly by user_id.
+    """
+    res = (
+        get_supabase()
+        .table("conversations")
+        .delete()
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return len(res.data or [])
+
+
 # ---------- messages ----------
 
 @router.get("/conversations/{conversation_id}", response_model=list[MessageOut])
@@ -232,6 +262,9 @@ def get_messages(conversation_id: str, user: AuthUser = Depends(get_current_user
 
 def _prepare_send(conversation_id: str, user: AuthUser, message: str) -> dict:
     """Shared checks + save user message before run_turn / stream_turn."""
+    if not get_status(user.id).linked:
+        raise HTTPException(status_code=400, detail=LINK_REQUIRED)
+
     convo = get_conversation(conversation_id, user.id)
 
     # Need room for this user message + the assistant reply (2 rows)
@@ -262,9 +295,9 @@ async def send_message(
 ):
     _prepare_send(conversation_id, user, body.message)
 
-    # 3) Run the agent
+    # 3) Run the agent (user_id → in-process trading tools)
     try:
-        turn = await run_turn(conversation_id, body.message)
+        turn = await run_turn(conversation_id, body.message, user_id=user.id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent error: {e}") from e
 
@@ -297,7 +330,9 @@ async def send_message_stream(
 
     async def event_gen():
         try:
-            async for event in stream_turn(conversation_id, body.message):
+            async for event in stream_turn(
+                conversation_id, body.message, user_id=user.id
+            ):
                 if event.get("type") == "token":
                     yield f"data: {json.dumps(event)}\n\n"
                     continue
@@ -340,6 +375,8 @@ async def resume_message(
     user: AuthUser = Depends(get_current_user),
 ):
     get_conversation(conversation_id, user.id)
+    if not get_status(user.id).linked:
+        raise HTTPException(status_code=400, detail=LINK_REQUIRED)
 
     # Build approve/reject list for the agent
     decisions = []
@@ -352,7 +389,7 @@ async def resume_message(
         decisions.append(item)
 
     try:
-        turn = await resume_turn(conversation_id, decisions)
+        turn = await resume_turn(conversation_id, decisions, user_id=user.id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Agent error: {e}") from e
 

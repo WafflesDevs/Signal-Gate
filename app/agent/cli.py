@@ -4,8 +4,9 @@ CLI chat for Signal Gate.
 Run:
   python -m app.agent.cli
 
-Uses the same agent as the website. Make sure FastAPI is running on :8000
-so MCP tools can hit /paper and /price.
+Website chat passes the authenticated user id so trades use Settings-linked
+Alpaca keys. This CLI has no login — portfolio/trading tools will refuse
+with "Link Alpaca in Settings" / login required (no .env Alpaca fallback).
 """
 
 import asyncio
@@ -22,6 +23,10 @@ async def main():
     thread_id = "signal-gate-cli"
 
     print("----SIGNAL GATE----")
+    print(
+        "CLI has no user session — trading tools will not use .env Alpaca keys.\n"
+        "Use the website Chat (logged in + Settings linked) to place trades.\n"
+    )
     print("Chat started. Type 'quit' or 'exit' to stop.\n")
 
     while True:
@@ -32,10 +37,9 @@ async def main():
             print("Bye.")
             break
 
-        # 1) Send the message to the agent
-        result = await run_turn(thread_id, user_input)
+        # No user_id — tools fail clearly instead of using project .env keys
+        result = await run_turn(thread_id, user_input, user_id=None)
 
-        # 2) If it wants to buy/sell, ask you y/n, then resume
         while result.get("pending_trades"):
             decisions = []
             for action in result["pending_trades"]:
@@ -52,9 +56,8 @@ async def main():
                         }
                     )
 
-            result = await resume_turn(thread_id, decisions)
+            result = await resume_turn(thread_id, decisions, user_id=None)
 
-        # 3) Print the final reply
         print("Assistant:", result.get("reply", ""))
         print()
 

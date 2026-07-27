@@ -1,23 +1,17 @@
+import { CREATOR, CREATOR_LINKS } from "../../lib/creator";
+
 export function Footer() {
   return (
     <footer className="site-footer">
       <div className="site-footer__inner">
         <p className="site-footer__credit">
-          Made by <span className="credit-name">WaffeDevs</span>
+          Made by <span className="credit-name">{CREATOR}</span>
         </p>
         <div className="site-footer__links">
-          <a
-            href="https://www.linkedin.com/in/ayaanalii/"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href={CREATOR_LINKS.linkedin} target="_blank" rel="noreferrer">
             LinkedIn
           </a>
-          <a
-            href="https://github.com/WafflesDevs"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href={CREATOR_LINKS.github} target="_blank" rel="noreferrer">
             GitHub
           </a>
         </div>

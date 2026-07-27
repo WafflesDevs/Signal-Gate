@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" fill="none">
+<rect width="960" height="540" fill="#06080c"/>
+<rect x="48" y="48" width="864" height="444" rx="20" fill="#0b0f16" stroke="#4a5568" stroke-opacity="0.45"/>
+<text x="80" y="100" fill="#3ecf9a" font-family="ui-sans-serif,system-ui" font-size="18" font-weight="700">4 · Paste into Signal Gate Settings</text>
+<text x="80" y="130" fill="#9aa6b8" font-family="ui-sans-serif,system-ui" font-size="14">Choose Paper or Live to match where you generated the keys</text>
+<rect x="180" y="170" width="600" height="280" rx="16" fill="#121821" stroke="#8b97ab" stroke-opacity="0.25"/>
+<text x="210" y="210" fill="#e8ecf3" font-family="ui-sans-serif,system-ui" font-size="16" font-weight="600">Signal Gate · Settings</text>
+<text x="210" y="248" fill="#5c687c" font-family="ui-sans-serif,system-ui" font-size="12">API KEY ID</text>
+<rect x="210" y="258" width="540" height="36" rx="10" fill="#06080c" stroke="#4a5568" stroke-opacity="0.4"/>
+<text x="226" y="281" fill="#8b97ab" font-family="ui-monospace,monospace" font-size="13">PKABC…</text>
+<text x="210" y="322" fill="#5c687c" font-family="ui-sans-serif,system-ui" font-size="12">SECRET KEY</text>
+<rect x="210" y="332" width="540" height="36" rx="10" fill="#06080c" stroke="#4a5568" stroke-opacity="0.4"/>
+<text x="226" y="355" fill="#8b97ab" font-family="ui-monospace,monospace" font-size="13">••••••••••••</text>
+<rect x="210" y="388" width="90" height="32" rx="16" fill="rgba(62,207,154,0.18)" stroke="#3ecf9a"/>
+<text x="230" y="409" fill="#3ecf9a" font-family="ui-sans-serif,system-ui" font-size="12" font-weight="700">Paper</text>
+<rect x="312" y="388" width="80" height="32" rx="16" fill="#06080c" stroke="#4a5568" stroke-opacity="0.4"/>
+<text x="334" y="409" fill="#8b97ab" font-family="ui-sans-serif,system-ui" font-size="12">Live</text>
+<rect x="520" y="388" width="120" height="32" rx="10" fill="#3ecf9a"/>
+<text x="550" y="409" fill="#06080c" font-family="ui-sans-serif,system-ui" font-size="13" font-weight="700">Save</text>
+</svg>

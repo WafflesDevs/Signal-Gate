@@ -28,6 +28,7 @@ from app.exits.monitor import monitor_loop
 from app.routers.chat import router as chat_router
 from app.routers.paper import router as paper_router
 from app.routers.price import router as price_router
+from app.routers.settings import router as settings_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -70,6 +71,7 @@ app.add_middleware(
 app.include_router(price_router)
 app.include_router(paper_router)
 app.include_router(chat_router)
+app.include_router(settings_router)
 
 
 @app.get("/", status_code=status.HTTP_200_OK)

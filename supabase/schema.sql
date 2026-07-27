@@ -79,3 +79,43 @@ create policy "messages_delete_own"
       where c.id = messages.conversation_id and c.user_id = auth.uid()
     )
   );
+
+-- ---------------------------------------------------------------------------
+-- Alpaca credentials (per user). Backend encrypts api_secret with Fernet
+-- (CREDENTIALS_FERNET_KEY) before write. Run this section if you already
+-- applied the conversations/messages DDL earlier.
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.alpaca_credentials (
+  user_id uuid primary key references auth.users (id) on delete cascade,
+  api_key_id text not null,
+  api_secret_enc text not null,
+  is_paper boolean not null default true,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.alpaca_credentials enable row level security;
+
+-- Users may read their own row (secret is already encrypted; UI uses API status).
+drop policy if exists "alpaca_credentials_select_own" on public.alpaca_credentials;
+create policy "alpaca_credentials_select_own"
+  on public.alpaca_credentials for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "alpaca_credentials_insert_own" on public.alpaca_credentials;
+create policy "alpaca_credentials_insert_own"
+  on public.alpaca_credentials for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "alpaca_credentials_update_own" on public.alpaca_credentials;
+create policy "alpaca_credentials_update_own"
+  on public.alpaca_credentials for update
+  using (auth.uid() = user_id);
+
+drop policy if exists "alpaca_credentials_delete_own" on public.alpaca_credentials;
+create policy "alpaca_credentials_delete_own"
+  on public.alpaca_credentials for delete
+  using (auth.uid() = user_id);
+
+-- Note: the FastAPI backend uses SUPABASE_SERVICE_ROLE_KEY and bypasses RLS
+-- for encrypt/decrypt + upsert. Keep service role server-side only.

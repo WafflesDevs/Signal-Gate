@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" fill="none">
+<rect width="960" height="540" fill="#06080c"/>
+<rect x="48" y="48" width="864" height="444" rx="20" fill="#0b0f16" stroke="#4a5568" stroke-opacity="0.45"/>
+<text x="80" y="100" fill="#3ecf9a" font-family="ui-sans-serif,system-ui" font-size="18" font-weight="700">3 · Generate API Key ID + Secret</text>
+<text x="80" y="130" fill="#9aa6b8" font-family="ui-sans-serif,system-ui" font-size="14">In Alpaca: sidebar → API Keys → Generate New Key</text>
+<rect x="120" y="170" width="200" height="280" rx="12" fill="#121821" stroke="#4a5568" stroke-opacity="0.35"/>
+<text x="140" y="210" fill="#5c687c" font-family="ui-sans-serif,system-ui" font-size="13">Dashboard</text>
+<text x="140" y="245" fill="#5c687c" font-family="ui-sans-serif,system-ui" font-size="13">Portfolio</text>
+<rect x="136" y="262" width="168" height="34" rx="8" fill="rgba(62,207,154,0.14)" stroke="#3ecf9a" stroke-opacity="0.5"/>
+<text x="150" y="284" fill="#3ecf9a" font-family="ui-sans-serif,system-ui" font-size="13" font-weight="700">API Keys</text>
+<text x="140" y="330" fill="#5c687c" font-family="ui-sans-serif,system-ui" font-size="13">Orders</text>
+<rect x="360" y="170" width="520" height="280" rx="12" fill="#121821" stroke="#4a5568" stroke-opacity="0.35"/>
+<text x="390" y="220" fill="#e8ecf3" font-family="ui-sans-serif,system-ui" font-size="16" font-weight="600">Your API Keys</text>
+<rect x="390" y="250" width="220" height="44" rx="12" fill="#3ecf9a"/>
+<text x="420" y="278" fill="#06080c" font-family="ui-sans-serif,system-ui" font-size="14" font-weight="700">Generate New Key</text>
+<path d="M630 272 L700 272" stroke="#e6b35a" stroke-width="2"/>
+<text x="710" y="278" fill="#e6b35a" font-family="ui-sans-serif,system-ui" font-size="12">Click here</text>
+<rect x="390" y="320" width="460" height="40" rx="10" fill="#06080c" stroke="#4a5568" stroke-opacity="0.4"/>
+<text x="406" y="345" fill="#8b97ab" font-family="ui-monospace,monospace" font-size="13">Key ID: PK••••••••</text>
+<rect x="390" y="376" width="460" height="40" rx="10" fill="#06080c" stroke="#4a5568" stroke-opacity="0.4"/>
+<text x="406" y="401" fill="#8b97ab" font-family="ui-monospace,monospace" font-size="13">Secret: •••••••••• (copy once)</text>
+</svg>

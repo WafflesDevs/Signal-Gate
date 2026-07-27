@@ -1,12 +1,15 @@
 import { useState, type FormEvent } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "../auth/AuthContext";
 import { AuthCoinRain } from "../components/auth/AuthCoinRain";
+import { safeReturnPath } from "../components/auth/ProtectedRoute";
 
 export function Login() {
   const { user, loading, signIn, signUp } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = safeReturnPath(searchParams.get("next"));
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,7 +18,7 @@ export function Login() {
   const [busy, setBusy] = useState(false);
 
   if (!loading && user) {
-    return <Navigate to="/chat" replace />;
+    return <Navigate to={returnTo} replace />;
   }
 
   async function onSubmit(e: FormEvent) {
@@ -26,7 +29,7 @@ export function Login() {
     try {
       if (mode === "login") {
         await signIn(email.trim(), password);
-        navigate("/chat");
+        navigate(returnTo);
       } else {
         const { needsEmailConfirm } = await signUp(email.trim(), password);
         if (needsEmailConfirm) {
@@ -35,7 +38,7 @@ export function Login() {
           );
           setMode("login");
         } else {
-          navigate("/chat");
+          navigate(returnTo);
         }
       }
     } catch (err) {

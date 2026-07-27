@@ -49,6 +49,16 @@ export function UserMenu() {
             <span className="user-menu__label">Signed in</span>
             <span className="user-menu__email">{user.email}</span>
           </div>
+          <button
+            type="button"
+            className="user-menu__item"
+            onClick={() => {
+              setOpen(false);
+              navigate("/settings");
+            }}
+          >
+            Settings
+          </button>
           <button type="button" className="user-menu__logout" onClick={() => void onLogout()}>
             Log out
           </button>

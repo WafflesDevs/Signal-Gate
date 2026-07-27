@@ -6,13 +6,31 @@ import {
   type FormEvent,
   type KeyboardEvent,
 } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "../auth/AuthContext";
 import { useApi } from "../lib/api";
 import { UserMenu } from "../components/layout/UserMenu";
 import { ChartSidebar } from "../components/charts/ChartSidebar";
+import { ActiveTradesPanel } from "../components/trades/ActiveTradesPanel";
 import { API_BASE, detectPriceTicker } from "../lib/charts";
+import { CREATOR, CREATOR_LINKS } from "../lib/creator";
+
+const TRADES_COLLAPSED_KEY = "signal-gate:active-trades-collapsed";
+
+function readTradesCollapsed(): boolean {
+  try {
+    const v = localStorage.getItem(TRADES_COLLAPSED_KEY);
+    if (v === "1") return true;
+    if (v === "0") return false;
+  } catch {
+    /* ignore */
+  }
+  if (typeof window !== "undefined") {
+    return window.matchMedia("(max-width: 1100px)").matches;
+  }
+  return false;
+}
 
 type TradeRequest = {
   name: string;
@@ -39,6 +57,12 @@ function tradeTicker(t: TradeRequest): string {
 
 function tradeQty(t: TradeRequest): number | null {
   const raw = t.arguments?.qty;
+  const n = typeof raw === "number" ? raw : Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+function tradeNotional(t: TradeRequest): number | null {
+  const raw = t.arguments?.notional_usd;
   const n = typeof raw === "number" ? raw : Number(raw);
   return Number.isFinite(n) && n > 0 ? n : null;
 }
@@ -91,9 +115,9 @@ type Conversation = {
 
 const suggestions = [
   "What’s my portfolio worth?",
+  "Buy $100 of XRP",
   "Buy 0.01 BTC",
   "Price of ETH right now",
-  "Sell all SOL",
 ];
 
 /** Match backend caps in app/routers/chat.py */
@@ -107,8 +131,18 @@ const MESSAGE_LIMIT_MSG =
 
 function tradeLabel(t: TradeRequest) {
   const args = t.arguments || {};
+  const ticker = String(args.ticker ?? "").trim().toUpperCase() || "?";
+  const notional = tradeNotional(t);
+  if (notional != null) {
+    const dollars = notional.toLocaleString(undefined, {
+      maximumFractionDigits: 2,
+    });
+    return `${t.name} · $${dollars} of ${ticker}`;
+  }
+  if (t.name === "buy_max_trade") {
+    return `${t.name} · max ${ticker}`;
+  }
   const qty = args.qty ?? "?";
-  const ticker = args.ticker ?? "";
   return `${t.name} · ${qty} ${ticker}`.trim();
 }
 
@@ -134,6 +168,7 @@ function TradeExitFields({
 }) {
   const ticker = tradeTicker(trade);
   const qty = tradeQty(trade);
+  const notional = tradeNotional(trade);
   const entry = livePrice;
   const [stopLoss, setStopLoss] = useState("");
   const [takeProfit, setTakeProfit] = useState("");
@@ -180,6 +215,7 @@ function TradeExitFields({
     const plan: ExitPlan = { ticker };
     if (slParsed != null) plan.stop_loss = slParsed;
     if (tpParsed != null) plan.take_profit = tpParsed;
+    // Notional buys: omit qty → exit sells full position after fill
     if (qty != null) plan.qty = qty;
     onPlanChange(plan);
   }, [
@@ -193,13 +229,17 @@ function TradeExitFields({
   ]);
 
   const slPl =
-    entry != null && slParsed != null
-      ? (slParsed - entry) * (qty ?? 1)
-      : null;
+    entry != null && slParsed != null && qty != null
+      ? (slParsed - entry) * qty
+      : entry != null && slParsed != null && notional != null && entry > 0
+        ? notional * ((slParsed - entry) / entry)
+        : null;
   const tpPl =
-    entry != null && tpParsed != null
-      ? (tpParsed - entry) * (qty ?? 1)
-      : null;
+    entry != null && tpParsed != null && qty != null
+      ? (tpParsed - entry) * qty
+      : entry != null && tpParsed != null && notional != null && entry > 0
+        ? notional * ((tpParsed - entry) / entry)
+        : null;
 
   return (
     <div className="trade-card__exits">
@@ -232,7 +272,6 @@ function TradeExitFields({
         {!slError && slPl != null && (
           <span className="trade-card__pl trade-card__pl--loss">
             Est. loss: {formatUsd(slPl)}
-            {qty == null ? " / coin" : ""}
           </span>
         )}
       </label>
@@ -253,7 +292,6 @@ function TradeExitFields({
         {!tpError && tpPl != null && (
           <span className="trade-card__pl trade-card__pl--profit">
             Est. profit: {formatUsd(tpPl)}
-            {qty == null ? " / coin" : ""}
           </span>
         )}
       </label>
@@ -517,20 +555,48 @@ export function Chat() {
   const [typing, setTyping] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [bootError, setBootError] = useState("");
+  const [alpacaLinked, setAlpacaLinked] = useState<boolean | null>(null);
+  const [alpacaCheckError, setAlpacaCheckError] = useState("");
   const streamRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const resolvingRef = useRef(false);
   const [chartTicker, setChartTicker] = useState<string | null>(null);
   const [limitNotice, setLimitNotice] = useState("");
+  const [tradesRefreshKey, setTradesRefreshKey] = useState(0);
+  const [tradesCollapsed, setTradesCollapsed] = useState(readTradesCollapsed);
+  const [narrowDesk, setNarrowDesk] = useState(false);
 
   const atChatLimit = conversations.length >= MAX_CHATS;
   const atMessageLimit = messages.length >= MAX_MESSAGES;
 
-  // Phones start with the history drawer closed so chat has full width
+  // Phones start with the history drawer closed so chat has full width.
+  // Active-trades collapsed preference lives in localStorage — don't force-reset it.
   useEffect(() => {
-    if (window.matchMedia("(max-width: 860px)").matches) {
-      setSidebarOpen(false);
+    const historyMq = window.matchMedia("(max-width: 860px)");
+    const deskMq = window.matchMedia("(max-width: 1100px)");
+    const apply = () => {
+      if (historyMq.matches) setSidebarOpen(false);
+      setNarrowDesk(deskMq.matches);
+    };
+    apply();
+    historyMq.addEventListener("change", apply);
+    deskMq.addEventListener("change", apply);
+    return () => {
+      historyMq.removeEventListener("change", apply);
+      deskMq.removeEventListener("change", apply);
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(TRADES_COLLAPSED_KEY, tradesCollapsed ? "1" : "0");
+    } catch {
+      /* ignore */
     }
+  }, [tradesCollapsed]);
+
+  const toggleTradesCollapsed = useCallback(() => {
+    setTradesCollapsed((c) => !c);
   }, []);
 
   useEffect(() => {
@@ -545,6 +611,51 @@ export function Chat() {
       setLimitNotice((n) => (n === MESSAGE_LIMIT_MSG ? "" : n));
     }
   }, [atMessageLimit]);
+
+  // Gate: require linked Alpaca before loading the desk
+  useEffect(() => {
+    if (!user || !accessToken) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setAlpacaCheckError("");
+        const s = (await api.get("/settings/alpaca")) as {
+          linked?: boolean;
+        };
+        if (!cancelled) setAlpacaLinked(!!s.linked);
+      } catch (e) {
+        if (!cancelled) {
+          setAlpacaLinked(false);
+          setAlpacaCheckError(
+            e instanceof Error ? e.message : "Could not check Alpaca link status"
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user, accessToken, api]);
+
+  // Settings disconnect wipes chats server-side — clear local desk state immediately
+  useEffect(() => {
+    const onDisconnected = () => {
+      setAlpacaLinked(false);
+      setConversations([]);
+      setActiveId(null);
+      setMessages([]);
+      setInput("");
+      setTyping(false);
+      setBootError("");
+      setLimitNotice("");
+      setChartTicker(null);
+      setTradesRefreshKey(0);
+    };
+    window.addEventListener("signal-gate:alpaca-disconnected", onDisconnected);
+    return () => {
+      window.removeEventListener("signal-gate:alpaca-disconnected", onDisconnected);
+    };
+  }, []);
 
   const refreshConversations = useCallback(async () => {
     const rows = (await api.get("/chat/conversations")) as Conversation[];
@@ -604,7 +715,7 @@ export function Chat() {
   }, [api, refreshConversations, conversations.length]);
 
   useEffect(() => {
-    if (!user || !accessToken) return;
+    if (!user || !accessToken || alpacaLinked !== true) return;
     (async () => {
       try {
         setBootError("");
@@ -619,9 +730,9 @@ export function Chat() {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, accessToken]);
+  }, [user, accessToken, alpacaLinked]);
 
-  if (loading) {
+  if (loading || alpacaLinked === null) {
     return (
       <div className="page chat-page chat-page--center">
         <p className="chat-boot">Loading desk…</p>
@@ -629,8 +740,74 @@ export function Chat() {
     );
   }
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
+  if (!alpacaLinked) {
+    return (
+      <div className="page chat-page chat-page--center">
+        <div className="chat-setup">
+          <img src="/signal-s.png" alt="" className="chat-setup__logo" />
+          <h1 className="chat-setup__title">Set up your Alpaca trading account</h1>
+          <p className="chat-setup__copy">
+            Link Paper or Live API keys in Settings before using the desk. Chat trades
+            on <em>your</em> Alpaca account — nothing is linked yet.
+          </p>
+          <ol className="chat-setup__guide">
+            <li>
+              <p>
+                <strong>1.</strong> Open the Paper (or Live) dashboard and find the{" "}
+                <strong>API Keys</strong> panel on the right.
+              </p>
+              <img
+                src="/guide/alpaca-dashboard.png"
+                alt="Alpaca paper dashboard with API Keys panel on the right"
+                className="chat-setup__shot"
+                loading="lazy"
+              />
+            </li>
+            <li>
+              <p>
+                <strong>2.</strong> Copy the <strong>Key</strong> and{" "}
+                <strong>Secret</strong> from the API Keys panel (secret is shown once).
+              </p>
+              <img
+                src="/guide/alpaca-api-keys.png"
+                alt="Alpaca API Keys panel with Key and Secret redacted"
+                className="chat-setup__shot"
+                loading="lazy"
+              />
+            </li>
+          </ol>
+          <p className="chat-setup__key-links">
+            Get API keys:{" "}
+            <a
+              href="https://app.alpaca.markets/paper/dashboard/overview"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Alpaca Paper
+            </a>
+            {" · "}
+            <a
+              href="https://app.alpaca.markets/live/dashboard/overview"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Alpaca Live
+            </a>
+          </p>
+          {alpacaCheckError && (
+            <p className="chat-setup__error">{alpacaCheckError}</p>
+          )}
+          <div className="chat-setup__actions">
+            <Link to="/settings" className="btn btn--primary">
+              Open Settings
+            </Link>
+            <Link to="/" className="btn btn--ghost">
+              Back home
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   function resizeTa() {
@@ -846,12 +1023,45 @@ export function Chat() {
           : "Trade rejected. Nothing was sent."
         : raw;
 
-      // After a successful buy approve, set any SL/TP the user chose (short-term)
-      if (approve && exits.length > 0) {
+      // After a successful buy approve: set new SL/TP, or clear stale rules
+      // when Investment / Short-term with empty exits (rules are keyed by ticker).
+      if (approve) {
+        const buyTickers = [
+          ...new Set(
+            pending
+              .filter(isBuyTrade)
+              .map(tradeTicker)
+              .filter((t): t is string => !!t)
+          ),
+        ];
+        const exitByTicker = new Map(
+          exits
+            .filter(
+              (p) =>
+                p.ticker &&
+                (p.stop_loss != null || p.take_profit != null)
+            )
+            .map((p) => [p.ticker.toUpperCase(), p])
+        );
+
         // Brief pause so the market buy can fill before /paper/exits checks holdings
-        await new Promise((r) => setTimeout(r, 600));
+        if (exitByTicker.size > 0 || buyTickers.length > 0) {
+          await new Promise((r) => setTimeout(r, 600));
+        }
+
         const exitNotes: string[] = [];
-        for (const plan of exits) {
+
+        // Clear phantom exits for buys that did not set SL/TP this approve
+        for (const ticker of buyTickers) {
+          if (exitByTicker.has(ticker)) continue;
+          try {
+            await api.del(`/paper/exits/${encodeURIComponent(ticker)}`);
+          } catch {
+            /* ignore — idempotent clear */
+          }
+        }
+
+        for (const plan of exitByTicker.values()) {
           try {
             const body: Record<string, unknown> = { ticker: plan.ticker };
             if (plan.stop_loss != null) body.stop_loss = plan.stop_loss;
@@ -901,6 +1111,12 @@ export function Chat() {
         },
       ]);
       await refreshConversations();
+      // Refresh Active trades panel after approve so new fills / exits appear
+      if (approve) {
+        setTradesRefreshKey((k) => k + 1);
+        // Second tick — Alpaca fill can lag a beat behind submit
+        window.setTimeout(() => setTradesRefreshKey((k) => k + 1), 1500);
+      }
     } catch (e) {
       setMessages((prev) =>
         prev.map((m) =>
@@ -960,7 +1176,11 @@ export function Chat() {
   }
 
   return (
-    <div className={`page chat-layout${sidebarOpen ? "" : " chat-layout--collapsed"}`}>
+    <div
+      className={`page chat-layout${sidebarOpen ? "" : " chat-layout--collapsed"}${
+        tradesCollapsed ? " chat-layout--trades-collapsed" : ""
+      }`}
+    >
       {sidebarOpen && (
         <button
           type="button"
@@ -1035,29 +1255,53 @@ export function Chat() {
       )}
 
       <div className="chat-page">
-        <header className="chat-header">
-          <div className="chat-header__left">
-            <img src="/signal-s.png" alt="" className="chat-header__icon" />
-            <div>
-              <h1 className="brand-name">Signal Gate</h1>
-              <p>Paper mode</p>
+        <div className="chat-page__top">
+          <header className="chat-header">
+            <div className="chat-header__left">
+              <img src="/signal-s.png" alt="" className="chat-header__icon" />
+              <div>
+                <h1 className="brand-name">Signal Gate</h1>
+                <p>Paper mode</p>
+              </div>
             </div>
-          </div>
-          <div className="chat-header__right">
-            <div className="chat-status">
-              <span className="chat-status__dot" />
-              Live
+            <div className="chat-header__right">
+              <button
+                type="button"
+                className={`chat-header__trades-btn${!tradesCollapsed ? " is-active" : ""}`}
+                onClick={toggleTradesCollapsed}
+                aria-pressed={!tradesCollapsed}
+                title={
+                  tradesCollapsed ? "Show active trades" : "Hide active trades"
+                }
+              >
+                Trades
+              </button>
+              <div className="chat-status">
+                <span className="chat-status__dot" />
+                Live
+              </div>
+              <UserMenu />
             </div>
-            <UserMenu />
-          </div>
-        </header>
+          </header>
 
-        {bootError && (
-          <div className="chat-boot-error">
-            {bootError}. Make sure Supabase is linked and the API is running.{" "}
-            <Link to="/login">Back to login</Link>
-          </div>
-        )}
+          {narrowDesk && (
+            <div className="active-trades-slot active-trades-slot--drawer">
+              <ActiveTradesPanel
+                variant="drawer"
+                refreshKey={tradesRefreshKey}
+                collapsed={tradesCollapsed}
+                onToggle={toggleTradesCollapsed}
+              />
+            </div>
+          )}
+
+          {bootError && (
+            <div className="chat-boot-error">
+              {bootError}. Make sure Supabase is linked and the API is running.{" "}
+              <Link to="/login">Back to login</Link>
+            </div>
+          )}
+        </div>
 
         <div className="chat-stream" ref={streamRef}>
           {messages.length === 0 && !typing && (
@@ -1207,18 +1451,29 @@ export function Chat() {
               : "Enter to send · Shift+Enter for new line"}
           </p>
           <p className="chat-composer__credit">
-            Made by <span className="credit-name">WaffeDevs</span>
+            Made by <span className="credit-name">{CREATOR}</span>
             <span className="chat-composer__sep">·</span>
-            <a href="https://www.linkedin.com/in/ayaanalii/" target="_blank" rel="noreferrer">
+            <a href={CREATOR_LINKS.linkedin} target="_blank" rel="noreferrer">
               LinkedIn
             </a>
             <span className="chat-composer__sep">·</span>
-            <a href="https://github.com/WafflesDevs" target="_blank" rel="noreferrer">
+            <a href={CREATOR_LINKS.github} target="_blank" rel="noreferrer">
               GitHub
             </a>
           </p>
         </form>
       </div>
+
+      {!narrowDesk && (
+        <div className="active-trades-slot active-trades-slot--rail">
+          <ActiveTradesPanel
+            variant="rail"
+            refreshKey={tradesRefreshKey}
+            collapsed={tradesCollapsed}
+            onToggle={toggleTradesCollapsed}
+          />
+        </div>
+      )}
 
       <ChartSidebar ticker={chartTicker} onClose={() => setChartTicker(null)} />
     </div>

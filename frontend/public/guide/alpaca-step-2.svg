@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540" fill="none">
+<rect width="960" height="540" fill="#06080c"/>
+<rect x="48" y="48" width="864" height="444" rx="20" fill="#0b0f16" stroke="#4a5568" stroke-opacity="0.45"/>
+<text x="80" y="100" fill="#3ecf9a" font-family="ui-sans-serif,system-ui" font-size="18" font-weight="700">2 · Open the matching dashboard</text>
+<text x="80" y="130" fill="#9aa6b8" font-family="ui-sans-serif,system-ui" font-size="14">Paper keys come from Paper. Live keys come from Live. Mixing them fails.</text>
+<rect x="100" y="170" width="340" height="270" rx="14" fill="#121821" stroke="#3ecf9a" stroke-opacity="0.55"/>
+<rect x="120" y="190" width="72" height="26" rx="8" fill="rgba(62,207,154,0.18)"/>
+<text x="132" y="208" fill="#3ecf9a" font-family="ui-sans-serif,system-ui" font-size="12" font-weight="700">PAPER</text>
+<text x="120" y="250" fill="#e8ecf3" font-family="ui-sans-serif,system-ui" font-size="16" font-weight="600">Paper dashboard</text>
+<text x="120" y="280" fill="#9aa6b8" font-family="ui-sans-serif,system-ui" font-size="13">Fake money · practice trades</text>
+<rect x="120" y="310" width="300" height="36" rx="10" fill="#06080c" stroke="#3ecf9a" stroke-opacity="0.35"/>
+<text x="136" y="333" fill="#8b97ab" font-family="ui-sans-serif,system-ui" font-size="13">Paper Trading ON</text>
+<rect x="520" y="170" width="340" height="270" rx="14" fill="#121821" stroke="#e6b35a" stroke-opacity="0.55"/>
+<rect x="540" y="190" width="64" height="26" rx="8" fill="rgba(230,179,90,0.18)"/>
+<text x="552" y="208" fill="#e6b35a" font-family="ui-sans-serif,system-ui" font-size="12" font-weight="700">LIVE</text>
+<text x="540" y="250" fill="#e8ecf3" font-family="ui-sans-serif,system-ui" font-size="16" font-weight="600">Live dashboard</text>
+<text x="540" y="280" fill="#9aa6b8" font-family="ui-sans-serif,system-ui" font-size="13">Real money · real risk</text>
+<rect x="540" y="310" width="300" height="36" rx="10" fill="#06080c" stroke="#e6b35a" stroke-opacity="0.35"/>
+<text x="556" y="333" fill="#8b97ab" font-family="ui-sans-serif,system-ui" font-size="13">Live Trading</text>
+<text x="360" y="470" fill="#ef6b6b" font-family="ui-sans-serif,system-ui" font-size="13" font-weight="600">⚠ Paper keys ≠ Live keys</text>
+</svg>
