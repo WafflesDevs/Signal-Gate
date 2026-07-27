@@ -17,7 +17,7 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field, model_validator
 from tavily import TavilyClient
 
-from app.core.alpaca_client import LINK_REQUIRED, TradingAuthError
+from app.core.alpaca_client import LINK_REQUIRED, TradingAuthError, friendly_trading_error
 from app.core.user_context import get_current_user_id, trading_user
 from app.routers import paper as paper_svc
 
@@ -56,6 +56,9 @@ def _require_user(config: Optional[RunnableConfig] = None) -> str:
 def _err(e: Exception) -> str:
     if isinstance(e, TradingAuthError):
         return json.dumps({"error": e.detail})
+    mapped = friendly_trading_error(e)
+    if mapped:
+        return json.dumps({"error": mapped})
     detail = getattr(e, "detail", None)
     if isinstance(detail, str) and detail:
         return json.dumps({"error": detail})

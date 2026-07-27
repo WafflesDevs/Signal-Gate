@@ -130,10 +130,8 @@ def remove_ticker(ticker: str):
 
 @router.get("/getprice/{ticker}", status_code=status.HTTP_200_OK)
 def get_price(ticker: str):
-    """Current USD price from Coinbase."""
+    """Current USD price from Coinbase (public; no Alpaca)."""
     ticker = clean_ticker(ticker)
-    if ticker not in tickers:
-        raise HTTPException(status_code=404, detail=f"{ticker} is not in the ticker list")
     try:
         r = requests.get(
             f"https://api.coinbase.com/v2/prices/{ticker}-USD/spot",
@@ -141,11 +139,18 @@ def get_price(ticker: str):
         )
         r.raise_for_status()
         data = r.json()
+        amount = data.get("data", {}).get("amount")
+        if amount is None:
+            raise HTTPException(status_code=404, detail=f"No USD price for {ticker}")
+        if ticker not in tickers:
+            tickers.append(ticker)
         return {
             "ticker": ticker,
-            "price": data.get("data", {}).get("amount"),
+            "price": amount,
             "currency": "USD",
         }
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

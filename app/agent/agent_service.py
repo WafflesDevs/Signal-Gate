@@ -10,35 +10,30 @@ Simple flow:
   stream_turn()  → same, but yield text tokens as they arrive
   resume_turn()  → user clicks Approve or Reject
 
-Portfolio/trading tools run in-process (not MCP HTTP) so they use the
-logged-in user's Alpaca keys via current_user_id contextvar.
+Portfolio/trading and market (price/ticker) tools all run in-process.
+No MCP stdio — that breaks on Render (.venv path + 127.0.0.1:8000).
+Trading tools use the logged-in user's Alpaca keys via current_user_id.
 """
 
 from __future__ import annotations
 
 import asyncio
 from contextlib import contextmanager
-from pathlib import Path
 from types import SimpleNamespace
 from typing import AsyncIterator, Iterator, Optional
 
 from dotenv import load_dotenv
 from langchain.agents import create_agent
 from langchain.agents.middleware import HumanInTheLoopMiddleware
-from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import Command
 
+from app.agent.market_tools import build_market_tools
 from app.agent.portfolio_tools import build_portfolio_tools
 from app.core.user_context import trading_user
 
 load_dotenv()
-
-# Paths to the MCP tool scripts (project root = two levels up from this file)
-ROOT = Path(__file__).resolve().parents[2]
-MCP_TICKERS = str(ROOT / "MCP" / "tickers.py")
-PYTHON = str(ROOT / ".venv" / "bin" / "python")
 
 SYSTEM_PROMPT = """
 You are an AI assistant for a trading platform (user's linked Alpaca Paper or Live account).
@@ -62,7 +57,8 @@ RULES:
    words like "max", "all in", "fill portfolio", "as much as possible" for a single ticker.
    Never use it when they named a dollar amount — use notional_usd instead.
 6. Sell all of a coin → get_current_positions, then sell_trade once with the full qty.
-7. Use get_price for prices and get_tickers for the list.
+7. Use get_price for USD spot prices (Coinbase) and get_tickers for the tracked list.
+   Prices do NOT need Alpaca. Always call get_price when the user asks for a price.
 8. After a trade, call get_current_portfoilo and report the tool results honestly.
    If the tool returned notional_usd=10000, say you spent ~$10,000 — do not invent fills.
    If cash only moved a little, say so; never claim $10,000 when tools show otherwise.
@@ -72,6 +68,8 @@ RULES:
     Never call set_exits, cancel_exits, or list_exits. Do not invent exit prices or
     ask them to confirm exits in chat — just propose the buy and wait for Approve/Reject.
 11. If tools say no Alpaca account is linked, tell the user to open Settings and connect keys.
+    If tools say Incorrect Alpaca keys or CREDENTIALS_FERNET_KEY, tell them to fix keys /
+    Fernet env and re-link in Settings. Do not invent portfolio numbers.
 12. After every trade based execution tell the user to check the active trades panel on their right side.
 13. If the user asks about withdrawing money, tell them to check the Alpaca Dashboard.
 """
@@ -93,19 +91,8 @@ async def get_agent():
         if _agent is not None:
             return _agent
 
-        # Tickers/prices stay on MCP (public endpoints, no user keys).
-        # Portfolio/trading tools are in-process so they see current_user_id.
-        client = MultiServerMCPClient(
-            {
-                "tickers": {
-                    "transport": "stdio",
-                    "command": PYTHON,
-                    "args": [MCP_TICKERS],
-                },
-            }
-        )
-        ticker_tools = await client.get_tools()
-        tools = [*build_portfolio_tools(), *ticker_tools]
+        # All tools in-process: portfolio (user Alpaca) + market (Coinbase spot).
+        tools = [*build_portfolio_tools(), *build_market_tools()]
 
         _checkpointer = InMemorySaver()
         _agent = create_agent(

@@ -72,3 +72,91 @@ def test_get_trading_client_builds_from_linked_creds():
             client = get_trading_client("user-123")
             assert client is fake_client
             build.assert_called_once_with(creds)
+
+
+def test_get_trading_client_maps_fernet_decrypt_failure():
+    with patch(
+        "app.core.alpaca_client.load_credentials",
+        side_effect=RuntimeError(
+            "Could not decrypt stored Alpaca secret — check CREDENTIALS_FERNET_KEY"
+        ),
+    ):
+        with pytest.raises(TradingAuthError) as err:
+            get_trading_client("user-123")
+        assert "decrypt" in err.value.detail.lower() or "FERNET" in err.value.detail
+
+
+def test_build_trading_client_rejects_empty_keys():
+    from app.core.alpaca_client import INCOMPLETE_CREDS, build_trading_client
+    from app.core.alpaca_credentials import AlpacaCredentials
+
+    creds = AlpacaCredentials(
+        user_id="u", api_key_id="  ", api_secret="", is_paper=True
+    )
+    with pytest.raises(TradingAuthError) as err:
+        build_trading_client(creds)
+    assert err.value.detail == INCOMPLETE_CREDS
+
+
+def test_friendly_trading_error_maps_unauthorized_json():
+    from app.core.alpaca_client import friendly_trading_error
+
+    class FakeApiError(Exception):
+        status_code = 401
+
+    msg = friendly_trading_error(
+        FakeApiError('{"message": "unauthorized."}'), is_paper=True
+    )
+    assert msg is not None
+    assert "Incorrect Alpaca keys" in msg
+    assert "Paper" in msg
+
+
+def test_market_get_price_calls_coinbase_not_loopback():
+    from app.agent import market_tools
+
+    fake = MagicMock()
+    fake.raise_for_status = MagicMock()
+    fake.json.return_value = {"data": {"amount": "3500.12"}}
+
+    with patch("app.agent.market_tools.requests.get", return_value=fake) as get:
+        out = market_tools.get_price("ETH")
+        assert "3500.12" in out
+        assert "ETH" in out
+        url = get.call_args[0][0]
+        assert "api.coinbase.com" in url
+        assert "127.0.0.1" not in url
+
+
+def test_get_agent_uses_in_process_market_tools_only():
+    """Agent must not spawn MCP stdio (broken on Render)."""
+    import asyncio
+
+    import app.agent.agent_service as svc
+
+    svc._agent = None
+    svc._checkpointer = None
+
+    async def _run():
+        with patch("app.agent.agent_service.create_agent") as create:
+            create.return_value = object()
+            with patch("app.agent.agent_service.ChatOpenAI"):
+                with patch("app.agent.agent_service.InMemorySaver"):
+                    with patch(
+                        "app.agent.agent_service.build_portfolio_tools",
+                        return_value=["p"],
+                    ):
+                        with patch(
+                            "app.agent.agent_service.build_market_tools",
+                            return_value=["m"],
+                        ) as market:
+                            await svc.get_agent()
+                            market.assert_called_once()
+                            assert create.call_args.kwargs.get("tools") == ["p", "m"]
+
+    try:
+        asyncio.run(_run())
+    finally:
+        svc._agent = None
+        svc._checkpointer = None
+

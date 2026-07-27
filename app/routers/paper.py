@@ -24,7 +24,11 @@ from pydantic import BaseModel, Field, model_validator
 from alpaca.trading.requests import MarketOrderRequest
 from alpaca.trading.enums import OrderSide, TimeInForce
 
-from app.core.alpaca_client import TradingAuthError, get_trading_client
+from app.core.alpaca_client import (
+    TradingAuthError,
+    friendly_trading_error,
+    get_trading_client,
+)
 from app.core.alpaca_credentials import load_credentials
 from app.core.auth import AuthUser, get_current_user
 from app.core.user_context import trading_user
@@ -33,13 +37,37 @@ from app.exits import store as exit_store
 router = APIRouter(prefix="/paper", tags=["paper"])
 
 
-def _raise_http(exc: Exception) -> None:
+def _is_paper_for_user(user_id: str) -> bool:
+    try:
+        creds = load_credentials(user_id)
+    except Exception:
+        return True
+    if creds is None:
+        return True
+    return bool(creds.is_paper)
+
+
+def _raise_http(exc: Exception, *, user_id: Optional[str] = None) -> None:
     """Convert domain trading errors to HTTP; re-raise HTTP as-is."""
     if isinstance(exc, HTTPException):
         raise exc
     if isinstance(exc, TradingAuthError):
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+    is_paper = _is_paper_for_user(user_id) if user_id else True
+    mapped = friendly_trading_error(exc, is_paper=is_paper)
+    if mapped:
+        raise HTTPException(status_code=400, detail=mapped) from exc
     raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+def _paper_get_error(exc: Exception, user_id: str) -> HTTPException:
+    """Map Alpaca/Fernet failures on GET routes to a clear HTTP error."""
+    if isinstance(exc, TradingAuthError):
+        return HTTPException(status_code=exc.status_code, detail=exc.detail)
+    mapped = friendly_trading_error(exc, is_paper=_is_paper_for_user(user_id))
+    if mapped:
+        return HTTPException(status_code=400, detail=mapped)
+    return HTTPException(status_code=500, detail=str(exc))
 
 
 class TradeBody(BaseModel):
@@ -102,7 +130,10 @@ def base_ticker(ticker: str) -> str:
 
 
 def _mode_label(user_id: str) -> str:
-    creds = load_credentials(user_id)
+    try:
+        creds = load_credentials(user_id)
+    except Exception:
+        return "Paper"
     if creds is None:
         return "Paper"
     return "Paper" if creds.is_paper else "Live"
@@ -167,8 +198,7 @@ def _current_price(ticker: str) -> float:
 
 def _account_payload(user_id: str) -> dict:
     account = get_trading_client(user_id).get_account()
-    creds = load_credentials(user_id)
-    is_paper = True if creds is None else bool(creds.is_paper)
+    is_paper = _is_paper_for_user(user_id)
     return {
         "cash": account.cash,
         "equity": account.equity,
@@ -277,7 +307,11 @@ def _active_trades_payload(user_id: str) -> dict:
                 "has_exit": has_exit,
             }
         )
-    creds = load_credentials(user_id)
+    creds = None
+    try:
+        creds = load_credentials(user_id)
+    except Exception:
+        creds = None
     is_paper = True if creds is None else bool(creds.is_paper)
     return {
         "trades": trades,
@@ -392,10 +426,8 @@ def get_account(user: AuthUser = Depends(get_current_user)):
     try:
         with trading_user(user.id):
             return _account_payload(user.id)
-    except TradingAuthError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.detail) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise _paper_get_error(e, user.id) from e
 
 
 @router.get("/positions", status_code=status.HTTP_200_OK)
@@ -404,10 +436,8 @@ def get_positions(user: AuthUser = Depends(get_current_user)):
     try:
         with trading_user(user.id):
             return _positions_payload(user.id)
-    except TradingAuthError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.detail) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise _paper_get_error(e, user.id) from e
 
 
 @router.get("/active-trades", status_code=status.HTTP_200_OK)
@@ -419,10 +449,8 @@ def get_active_trades(user: AuthUser = Depends(get_current_user)):
     try:
         with trading_user(user.id):
             return _active_trades_payload(user.id)
-    except TradingAuthError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.detail) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise _paper_get_error(e, user.id) from e
 
 
 @router.post("/buy", status_code=status.HTTP_200_OK)
@@ -433,7 +461,7 @@ def buy(body: TradeBody, user: AuthUser = Depends(get_current_user)):
             return execute_buy_notional(user.id, body.notional_usd, body.ticker)
         return execute_buy(user.id, float(body.qty), body.ticker)
     except Exception as e:
-        _raise_http(e)
+        _raise_http(e, user_id=user.id)
 
 
 @router.post("/buy-max", status_code=status.HTTP_200_OK)
@@ -442,7 +470,7 @@ def buy_max(body: TickerBody, user: AuthUser = Depends(get_current_user)):
     try:
         return execute_buy_max(user.id, body.ticker)
     except Exception as e:
-        _raise_http(e)
+        _raise_http(e, user_id=user.id)
 
 
 @router.post("/sell", status_code=status.HTTP_200_OK)
@@ -451,7 +479,7 @@ def sell(body: SellBody, user: AuthUser = Depends(get_current_user)):
     try:
         return execute_sell(user.id, body.qty, body.ticker)
     except Exception as e:
-        _raise_http(e)
+        _raise_http(e, user_id=user.id)
 
 
 @router.get("/exits", status_code=status.HTTP_200_OK)
@@ -471,8 +499,8 @@ def set_exits(body: ExitBody, user: AuthUser = Depends(get_current_user)):
     try:
         with trading_user(user.id):
             held = held_qty(ticker, user_id=user.id)
-    except TradingAuthError as e:
-        raise HTTPException(status_code=e.status_code, detail=e.detail) from e
+    except Exception as e:
+        raise _paper_get_error(e, user.id) from e
     if held <= 0:
         raise HTTPException(
             status_code=400,

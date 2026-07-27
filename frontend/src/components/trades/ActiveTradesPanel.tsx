@@ -39,6 +39,53 @@ type Props = {
 
 const POLL_MS = 4000;
 
+/** Turn API / Alpaca JSON blobs into a short human message. */
+function humanizeActiveTradesError(raw: string): string {
+  const text = (raw || "").trim();
+  if (!text) return "Could not load positions";
+
+  let candidate = text;
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (parsed && typeof parsed === "object") {
+      const obj = parsed as Record<string, unknown>;
+      if (typeof obj.message === "string") candidate = obj.message;
+      else if (typeof obj.detail === "string") candidate = obj.detail;
+      else if (typeof obj.error === "string") candidate = obj.error;
+    }
+  } catch {
+    /* keep raw */
+  }
+
+  const lower = candidate.toLowerCase();
+  if (lower.includes("unauthorized")) {
+    return (
+      "Incorrect Alpaca keys — they do not work for this mode. " +
+      "Re-link Paper or Live keys in Settings."
+    );
+  }
+  if (lower.includes("credentials_fernet_key") || lower.includes("decrypt")) {
+    return (
+      "Server cannot decrypt Alpaca credentials. Set CREDENTIALS_FERNET_KEY " +
+      "on Render, then re-link Alpaca in Settings."
+    );
+  }
+  if (
+    lower.includes("link") ||
+    lower.includes("not connected") ||
+    lower.includes("no alpaca")
+  ) {
+    return "Link Alpaca in Settings to see open positions.";
+  }
+  if (lower.includes("incorrect alpaca")) {
+    return candidate;
+  }
+  if (candidate.startsWith("{") && candidate.endsWith("}")) {
+    return "Could not load positions from Alpaca. Check Settings and try again.";
+  }
+  return candidate;
+}
+
 function formatQty(n: number) {
   if (n >= 1000) return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
   if (n >= 1) return n.toLocaleString(undefined, { maximumFractionDigits: 4 });
@@ -105,18 +152,11 @@ export function ActiveTradesPanel({
       setUpdatedAt(new Date());
     } catch (e) {
       if (!mounted.current || seq !== loadSeq.current) return;
-      const msg = e instanceof Error ? e.message : "Could not load positions";
-      // Link / auth failures — surface a clear empty-state style message
+      const raw = e instanceof Error ? e.message : "Could not load positions";
+      const msg = humanizeActiveTradesError(raw);
       setError(msg);
-      if (
-        msg.toLowerCase().includes("link") ||
-        msg.toLowerCase().includes("alpaca") ||
-        msg.toLowerCase().includes("401") ||
-        msg.toLowerCase().includes("403")
-      ) {
-        setTrades([]);
-        setCount(0);
-      }
+      setTrades([]);
+      setCount(0);
     } finally {
       inflight.current = false;
       if (mounted.current && seq === loadSeq.current) setLoading(false);
@@ -142,11 +182,15 @@ export function ActiveTradesPanel({
     }
   }, [refreshKey, load]);
 
+  const lowerErr = error.toLowerCase();
   const linkNeeded =
     !!error &&
-    (error.toLowerCase().includes("link") ||
-      error.toLowerCase().includes("credentials") ||
-      error.toLowerCase().includes("not connected"));
+    (lowerErr.includes("link alpaca") ||
+      lowerErr.includes("re-link") ||
+      lowerErr.includes("settings") ||
+      lowerErr.includes("credentials_fernet") ||
+      lowerErr.includes("incorrect alpaca") ||
+      lowerErr.includes("not connected"));
 
   return (
     <aside
@@ -208,8 +252,8 @@ export function ActiveTradesPanel({
           )}
 
           {!loading && linkNeeded && (
-            <div className="active-trades__empty">
-              <p>Link Alpaca in Settings to see open positions.</p>
+            <div className="active-trades__empty active-trades__empty--err">
+              <p>{error}</p>
               <Link to="/settings" className="active-trades__link">
                 Open Settings →
               </Link>

@@ -18,6 +18,17 @@ from app.core.user_context import get_current_user_id
 
 
 LINK_REQUIRED = "Link your Alpaca account in Settings"
+FERNET_KEY_REQUIRED = (
+    "Server is missing CREDENTIALS_FERNET_KEY — set it in Render Environment, "
+    "then re-link Alpaca in Settings."
+)
+FERNET_DECRYPT_FAILED = (
+    "Could not decrypt stored Alpaca credentials — set CREDENTIALS_FERNET_KEY "
+    "on the server (same key used when linking), then re-link Alpaca in Settings."
+)
+INCOMPLETE_CREDS = (
+    "Linked Alpaca credentials are incomplete or empty. Re-link Alpaca in Settings."
+)
 
 
 class TradingAuthError(Exception):
@@ -57,12 +68,22 @@ def mode_prefix_hint(api_key_id: str, is_paper: bool) -> Optional[str]:
     return None
 
 
+def is_alpaca_unauthorized(exc: BaseException) -> bool:
+    """True when Alpaca (or a wrapped body) reports unauthorized / 401."""
+    status_code = getattr(exc, "status_code", None)
+    try:
+        if status_code is not None and int(status_code) == 401:
+            return True
+    except (TypeError, ValueError):
+        pass
+    text = str(exc).lower()
+    return "unauthorized" in text
+
+
 def alpaca_auth_error_detail(is_paper: bool, exc: BaseException) -> str:
     """User-facing message for failed Settings link / test. Never includes secrets."""
     mode = "Paper" if is_paper else "Live"
-    status_code = getattr(exc, "status_code", None)
-    text = str(exc).lower()
-    unauthorized = status_code == 401 or "unauthorized" in text
+    unauthorized = is_alpaca_unauthorized(exc)
 
     if unauthorized:
         return (
@@ -76,10 +97,35 @@ def alpaca_auth_error_detail(is_paper: bool, exc: BaseException) -> str:
     )
 
 
+def friendly_trading_error(
+    exc: BaseException, *, is_paper: bool = True
+) -> Optional[str]:
+    """
+    Map decrypt / empty-key / Alpaca unauthorized failures to a clear string.
+    Returns None when the exception is not a known credentials problem.
+    """
+    if isinstance(exc, TradingAuthError):
+        return exc.detail
+
+    text = str(exc)
+    lower = text.lower()
+    if "missing credentials_fernet_key" in lower:
+        return FERNET_KEY_REQUIRED
+    if "could not decrypt" in lower or "credentials_fernet_key" in lower:
+        return FERNET_DECRYPT_FAILED
+    if is_alpaca_unauthorized(exc):
+        return alpaca_auth_error_detail(is_paper, exc)
+    return None
+
+
 def build_trading_client(creds: AlpacaCredentials) -> TradingClient:
+    key = sanitize_credential(creds.api_key_id)
+    secret = sanitize_credential(creds.api_secret)
+    if not key or not secret:
+        raise TradingAuthError(INCOMPLETE_CREDS, status_code=400)
     return TradingClient(
-        api_key=sanitize_credential(creds.api_key_id),
-        secret_key=sanitize_credential(creds.api_secret),
+        api_key=key,
+        secret_key=secret,
         paper=bool(creds.is_paper),
     )
 
@@ -137,7 +183,15 @@ def get_trading_client(user_id: Optional[str] = None) -> TradingClient:
     if not uid:
         raise TradingAuthError("Login required to trade", status_code=401)
 
-    creds = load_credentials(uid)
+    try:
+        creds = load_credentials(uid)
+    except RuntimeError as e:
+        mapped = friendly_trading_error(e)
+        raise TradingAuthError(
+            mapped or FERNET_DECRYPT_FAILED,
+            status_code=500,
+        ) from e
+
     if creds is None:
         raise TradingAuthError(LINK_REQUIRED, status_code=400)
 
