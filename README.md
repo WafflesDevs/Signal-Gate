@@ -125,8 +125,8 @@ If you already applied an older schema, re-run the **`exit_rules`** section at t
 
 | Variable | Purpose |
 |---|---|
-| `VITE_SUPABASE_URL` | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | Public anon key |
+| `VITE_SUPABASE_URL` | Supabase project URL (**build-time**; required on Render before deploy) |
+| `VITE_SUPABASE_ANON_KEY` | Public anon key (**build-time**; same as `SUPABASE_ANON_KEY`) |
 | `VITE_API_BASE` (or `VITE_API_URL`) | Leave empty for same-origin / Vite proxy; set API URL only for split deploy |
 
 > Do **not** put trading `ALPACA_API_KEY` / `ALPACA_SECRET_KEY` in project env for the trading stack. Users link Paper or Live keys in **Settings**; secrets are stored encrypted per user.
@@ -170,13 +170,16 @@ Blueprint: [`render.yaml`](render.yaml) · build script: [`scripts/render-build.
 | `SUPABASE_URL` | Project URL |
 | `SUPABASE_ANON_KEY` | Anon/public key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Server only — never expose to the browser |
-| `VITE_SUPABASE_URL` | Same as `SUPABASE_URL` (baked into the SPA at **build** time) |
-| `VITE_SUPABASE_ANON_KEY` | Same as `SUPABASE_ANON_KEY` (build time) |
+| `VITE_SUPABASE_URL` | **Required at build time** — same as `SUPABASE_URL` (Vite bakes into SPA) |
+| `VITE_SUPABASE_ANON_KEY` | **Required at build time** — same as `SUPABASE_ANON_KEY` |
 | `VITE_API_BASE` | Leave **empty** (same-origin API + UI) |
 | `FRONTEND_URL` / `CORS_ORIGINS` | Optional for Option A (same origin) |
 
+> **Build-time Vite vars:** `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` must exist in Render Environment **before** the build runs. Adding them after a deploy is not enough — use **Manual Deploy → Clear build cache & deploy**. If only `SUPABASE_*` is set, `scripts/render-build.sh` copies those into `VITE_*` for the build; prefer setting both pairs explicitly.
+
 4. Deploy. Open `https://YOUR-SERVICE.onrender.com` — UI and API share one origin.  
-5. Confirm `https://YOUR-SERVICE.onrender.com/health` → `{"status":"ok"}`.
+5. Confirm `https://YOUR-SERVICE.onrender.com/health` → `{"status":"ok"}`.  
+6. If login shows **Failed to fetch** or the console hits `localhost/auth/v1/...`, the SPA was built without `VITE_*` — add them and clear-cache redeploy (see above). Also set Supabase **Site URL** to your Render domain.
 
 ### Option B — Static Site + Web Service (also free)
 

@@ -31,7 +31,10 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      # --- Vite build-time (same values as frontend/.env; baked into the SPA) ---
+      # --- REQUIRED at build time (Vite embeds these into the SPA) ---
+      # Same values as SUPABASE_URL / SUPABASE_ANON_KEY above.
+      # After setting/changing: Manual Deploy → Clear build cache & deploy.
+      # scripts/render-build.sh also falls back to SUPABASE_* if these are unset.
       - key: VITE_SUPABASE_URL
         sync: false
       - key: VITE_SUPABASE_ANON_KEY
