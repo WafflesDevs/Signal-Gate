@@ -119,3 +119,49 @@ create policy "alpaca_credentials_delete_own"
 
 -- Note: the FastAPI backend uses SUPABASE_SERVICE_ROLE_KEY and bypasses RLS
 -- for encrypt/decrypt + upsert. Keep service role server-side only.
+
+-- ---------------------------------------------------------------------------
+-- Exit rules (per-user SL/TP). Survives Render free-tier ephemeral disk.
+-- Backend (service role) reads/writes; one active rule per (user_id, ticker).
+-- Run this section if you already applied conversations/messages/credentials.
+-- ---------------------------------------------------------------------------
+
+create table if not exists public.exit_rules (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  ticker text not null,
+  qty double precision,
+  stop_loss double precision,
+  take_profit double precision,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, ticker)
+);
+
+create index if not exists exit_rules_user_ticker_idx
+  on public.exit_rules (user_id, ticker);
+
+alter table public.exit_rules enable row level security;
+
+drop policy if exists "exit_rules_select_own" on public.exit_rules;
+create policy "exit_rules_select_own"
+  on public.exit_rules for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "exit_rules_insert_own" on public.exit_rules;
+create policy "exit_rules_insert_own"
+  on public.exit_rules for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "exit_rules_update_own" on public.exit_rules;
+create policy "exit_rules_update_own"
+  on public.exit_rules for update
+  using (auth.uid() = user_id);
+
+drop policy if exists "exit_rules_delete_own" on public.exit_rules;
+create policy "exit_rules_delete_own"
+  on public.exit_rules for delete
+  using (auth.uid() = user_id);
+
+-- Note: FastAPI uses SUPABASE_SERVICE_ROLE_KEY and bypasses RLS for the
+-- exit monitor (cross-user poll) and API routes. Keep service role server-side.

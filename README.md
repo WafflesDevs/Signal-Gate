@@ -103,8 +103,10 @@ UI: [http://localhost:5173](http://localhost:5173) · API: [http://localhost:800
 
 1. Create a project and copy URL + anon + service_role keys  
 2. Enable Email auth (confirm email recommended)  
-3. Run [`supabase/schema.sql`](supabase/schema.sql) in the SQL Editor  
+3. Run [`supabase/schema.sql`](supabase/schema.sql) in the SQL Editor (creates chats, Alpaca credentials, and **`exit_rules`** for SL/TP persistence)  
 4. Full walkthrough: [`supabase/README.md`](supabase/README.md)
+
+If you already applied an older schema, re-run the **`exit_rules`** section at the bottom of `schema.sql` so production SL/TP rules survive Render restarts.
 
 ### Env vars
 
@@ -142,9 +144,11 @@ Blueprint: [`render.yaml`](render.yaml) · build script: [`scripts/render-build.
 | Limit | What it means for Signal Gate |
 |---|---|
 | **Spin-down after ~15 min idle** | First request after idle can take **30–60s+** (cold start). Health check is `/health`. |
-| **Ephemeral disk** | `data/exit_rules.json` (SL/TP rules) is **lost on restart/spin-down**. Positions still live on Alpaca; re-set exits after wake if needed. |
+| **Ephemeral disk** | Local files under `data/` are wiped on sleep/redeploy. **SL/TP exit rules live in Supabase** (`exit_rules` table), so they survive. Positions still live on Alpaca. |
 | **Build minutes** | Monthly build quota; prefer Blueprint auto-deploy on `main` only. |
 | **One free web service** | Prefer Option A below. Option B uses a free Static Site + free Web Service (two URLs + CORS). |
+
+**Cold starts vs exit persistence:** Free tier will still sleep; that only delays wake-up (monitor resumes after the instance is up). Persisting exits in Supabase is the important data fix. A full “always on” fix needs a paid Render plan, or an optional external uptime ping to `GET /health` (e.g. [cron-job.org](https://cron-job.org) every 10–14 min) — not required to keep SL/TP rules.
 
 ### Option A — single Web Service (recommended)
 
@@ -201,11 +205,11 @@ In Supabase → **Authentication → URL Configuration**:
 
 ### Common pitfalls
 
-- **Cold start looks “down”** — wait for the free instance to wake; hit `/health` once.
+- **Cold start looks “down”** — wait for the free instance to wake; hit `/health` once. Optional: free uptime cron pinging `/health` reduces sleep; paid “always on” removes it.
 - **Changed `VITE_*` but UI still wrong** — trigger a **new build** (Vite inlines env at build time).
 - **Auth redirect fails** — production domain missing from Supabase Redirect URLs / Site URL.
 - **CORS errors** — only on Option B; set `FRONTEND_URL` on the API to the exact Static Site origin (https, no trailing slash mismatch).
-- **SL/TP “vanished”** — free disk is ephemeral; rules file resets after sleep/redeploy.
+- **SL/TP missing after deploy** — run the latest [`supabase/schema.sql`](supabase/schema.sql) (includes `exit_rules`). Rules are no longer stored on Render’s disk.
 - **Do not commit `.env`** — already gitignored; use Render env + `.env.example` only.
 - **Keep one uvicorn worker** — exit monitor runs inside the app lifespan; don’t raise workers on free tier.
 

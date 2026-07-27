@@ -40,8 +40,9 @@ Run [`schema.sql`](schema.sql) in **SQL Editor**.
 This creates:
 - `conversations` + `messages` (chat history)
 - `alpaca_credentials` (per-user Alpaca API keys — **required for Settings**)
+- `exit_rules` (per-user SL/TP — **required on Render**; survives free-tier ephemeral disk)
 
-If you already ran an older schema, re-run the `alpaca_credentials` section at the bottom of `schema.sql`.
+If you already ran an older schema, re-run the newer sections at the bottom of `schema.sql` (`alpaca_credentials`, then `exit_rules`).
 
 ## 5. Env vars
 
