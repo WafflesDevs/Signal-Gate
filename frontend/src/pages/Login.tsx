@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useAuth } from "../auth/AuthContext";
 import { AuthCoinRain } from "../components/auth/AuthCoinRain";
 import { safeReturnPath } from "../components/auth/ProtectedRoute";
+import { RiskDisclaimer } from "../components/layout/RiskDisclaimer";
 
 export function Login() {
   const { user, loading, signIn, signUp } = useAuth();
@@ -94,6 +95,7 @@ export function Login() {
           <button type="submit" className="btn btn--primary auth-form__submit" disabled={busy}>
             {busy ? "Please wait…" : mode === "login" ? "Log in" : "Sign up"}
           </button>
+          <RiskDisclaimer className="auth-form__disclaimer" />
         </form>
 
         <p className="auth-card__switch">

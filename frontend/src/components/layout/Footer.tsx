@@ -1,4 +1,5 @@
 import { CREATOR, CREATOR_LINKS } from "../../lib/creator";
+import { RiskDisclaimer } from "./RiskDisclaimer";
 
 export function Footer() {
   return (
@@ -16,11 +17,7 @@ export function Footer() {
           </a>
         </div>
       </div>
-      <p className="site-footer__disclaimer">
-        Not financial advice. Signal Gate is a paper-trading demo for education
-        only. Crypto is volatile — you are solely responsible for any real-money
-        decisions you make. We are not liable for losses.
-      </p>
+      <RiskDisclaimer className="site-footer__disclaimer" />
     </footer>
   );
 }

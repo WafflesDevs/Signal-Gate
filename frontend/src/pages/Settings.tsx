@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "../auth/AuthContext";
+import { RiskDisclaimer } from "../components/layout/RiskDisclaimer";
 import { useApi } from "../lib/api";
 
 export type AlpacaStatus = {
@@ -391,6 +392,7 @@ export function Settings() {
               </>
             )}
           </div>
+          <RiskDisclaimer className="settings-form__disclaimer" />
         </form>
 
         <p className="settings-footer-links">

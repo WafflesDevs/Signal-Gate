@@ -15,6 +15,7 @@ import { ChartSidebar } from "../components/charts/ChartSidebar";
 import { ActiveTradesPanel } from "../components/trades/ActiveTradesPanel";
 import { API_BASE, detectPriceTicker } from "../lib/charts";
 import { CREATOR, CREATOR_LINKS } from "../lib/creator";
+import { RiskDisclaimer } from "../components/layout/RiskDisclaimer";
 
 const TRADES_COLLAPSED_KEY = "signal-gate:active-trades-collapsed";
 
@@ -805,6 +806,7 @@ export function Chat() {
               Back home
             </Link>
           </div>
+          <RiskDisclaimer className="chat-setup__disclaimer" />
         </div>
       </div>
     );
@@ -1454,6 +1456,7 @@ export function Chat() {
               ? "Delete this chat and open a new one"
               : "Enter to send · Shift+Enter for new line"}
           </p>
+          <RiskDisclaimer className="chat-composer__disclaimer" />
           <p className="chat-composer__credit">
             Made by <span className="credit-name">{CREATOR}</span>
             <span className="chat-composer__sep">·</span>

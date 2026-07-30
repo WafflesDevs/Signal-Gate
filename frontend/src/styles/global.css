@@ -1416,6 +1416,10 @@ img {
   justify-content: center;
 }
 
+.chat-setup__disclaimer {
+  margin-top: 1.15rem;
+}
+
 /* ——— Settings ——— */
 .settings-page {
   max-width: 720px;
@@ -2253,6 +2257,13 @@ img {
   font-family: var(--mono);
 }
 
+.chat-composer__disclaimer {
+  margin: 0.4rem 0 0;
+  max-width: 36rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .chat-composer__credit {
   margin: 0.45rem 0 0;
   text-align: center;
@@ -2516,6 +2527,11 @@ img {
   color: var(--signal);
   font-size: 0.85rem;
   line-height: 1.45;
+}
+
+.auth-form__disclaimer {
+  margin: 0.15rem 0 0;
+  text-align: center;
 }
 
 .auth-card__switch {
@@ -2916,10 +2932,30 @@ img {
   margin: 1rem auto 0;
   padding-top: 1rem;
   border-top: 1px solid var(--line);
-  font-size: 0.72rem;
-  line-height: 1.55;
-  color: var(--steel);
+}
+
+/* ——— Shared risk disclaimer ——— */
+.risk-disclaimer {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: var(--steel-dim);
   text-align: center;
+}
+
+.risk-disclaimer__primary,
+.risk-disclaimer__secondary {
+  display: block;
+}
+
+.risk-disclaimer__secondary {
+  margin-top: 0.2rem;
+  color: var(--steel);
+  opacity: 0.85;
+}
+
+.settings-form__disclaimer {
+  margin: 0.35rem 0 0;
 }
 
 /* ——— Charts desk (TradingView-style) ——— */
