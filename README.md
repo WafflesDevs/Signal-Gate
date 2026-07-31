@@ -115,6 +115,7 @@ If you already applied an older schema, re-run the **`exit_rules`** section at t
 | Variable | Purpose |
 |---|---|
 | `OPENAI_API_KEY` | Agent / research |
+| `OPENAI_MODEL` | Chat agent model (default `gpt-4.1-nano`) |
 | `TAVILY_API_KEY` | Web research |
 | `CREDENTIALS_FERNET_KEY` | Encrypt per-user Alpaca secrets at rest |
 | `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` | Auth + DB |
@@ -165,6 +166,7 @@ Blueprint: [`render.yaml`](render.yaml) · build script: [`scripts/render-build.
 | Key | Notes |
 |---|---|
 | `OPENAI_API_KEY` | Required |
+| `OPENAI_MODEL` | Optional; defaults to `gpt-4.1-nano` |
 | `TAVILY_API_KEY` | Required for web research |
 | `CREDENTIALS_FERNET_KEY` | Generate once; **never rotate lightly** (invalidates stored Alpaca secrets) |
 | `SUPABASE_URL` | Project URL |

@@ -18,6 +18,7 @@ Trading tools use the logged-in user's Alpaca keys via current_user_id.
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import AsyncIterator, Iterator, Optional
@@ -34,6 +35,9 @@ from app.agent.portfolio_tools import build_portfolio_tools
 from app.core.user_context import trading_user
 
 load_dotenv()
+
+# Cheap default for tool-calling agents; override with OPENAI_MODEL if needed.
+DEFAULT_OPENAI_MODEL = "gpt-4.1-nano"
 
 SYSTEM_PROMPT = """
 You are an AI assistant for a trading platform (user's linked Alpaca Paper or Live account).
@@ -94,9 +98,10 @@ async def get_agent():
         # All tools in-process: portfolio (user Alpaca) + market (Coinbase spot).
         tools = [*build_portfolio_tools(), *build_market_tools()]
 
+        model = (os.getenv("OPENAI_MODEL") or DEFAULT_OPENAI_MODEL).strip() or DEFAULT_OPENAI_MODEL
         _checkpointer = InMemorySaver()
         _agent = create_agent(
-            ChatOpenAI(model="gpt-4o-mini", temperature=0),
+            ChatOpenAI(model=model, temperature=0),
             tools=tools,
             system_prompt=SYSTEM_PROMPT,
             middleware=[
